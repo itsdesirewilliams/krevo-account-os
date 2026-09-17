@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Krevo Account OS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Mona+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div id="app" class="flex flex-col h-full">
+        <!-- Top bar -->
+        <header class="flex items-center gap-3 h-12 px-5 border-b hairline bg-[color:var(--panel)] shrink-0">
+            <span class="w-2 h-2 rounded-sm bg-[color:var(--accent)]"></span>
+            <h1 class="text-[15px] font-semibold tracking-[0.18em] text-[color:var(--text)]">KREVO</h1>
+        </header>
+
+        <div class="flex flex-1 min-h-0">
+            <!-- Sidebar -->
+            <aside class="w-60 shrink-0 border-r hairline bg-[color:var(--panel)] flex flex-col min-h-0">
+                <div class="px-4 pt-4 pb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--dim)]">Accounts</div>
+                <div id="account-list" class="flex-1 min-h-0 overflow-y-auto px-2 py-1"></div>
+
+                <div class="px-3 pt-2 pb-3 border-t hairline">
+                    <button id="new-account-btn" class="btn btn-ghost w-full">
+                        <span class="text-base leading-none">+</span> New Account
+                    </button>
+                </div>
+
+                <div class="px-2 pb-3 border-t hairline">
+                    <div id="trash-btn" class="sidebar-item" title="Trash">
+                        <span class="ficon"></span>
+                        <span class="flex-1">Trash</span>
+                        <span id="trash-count" class="text-[11px] text-[color:var(--dim)] px-1.5 py-0.5 rounded bg-[color:var(--panel-2)]">0</span>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Workspace -->
+            <main class="flex-1 min-w-0 flex flex-col bg-[color:var(--bg)] min-h-0">
+                <div id="account-tabs" class="h-9 shrink-0 flex items-stretch border-b hairline bg-[color:var(--panel)] overflow-x-auto"></div>
+                <div id="content-area" class="flex-1 min-h-0 overflow-y-auto"></div>
+                <div id="sheet-bar" class="h-9 shrink-0 flex items-center border-t hairline bg-[color:var(--panel)] px-1 overflow-x-auto">
+                    <div id="sheet-tabs" class="flex items-stretch h-full"></div>
+                    <button id="new-sheet-btn" class="ml-1 px-2 text-[color:var(--dim)] hover:text-[color:var(--accent)] text-lg leading-none" title="New Sheet">+</button>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <div id="modal-container"></div>
+
+    <!-- Modules: order matters (each depends on ones before it) -->
+    <script src="js/storage.js"></script>
+    <script src="js/state.js"></script>
+    <script src="js/accounts.js"></script>
+    <script src="js/sheets.js"></script>
+    <script src="js/projects.js"></script>
+    <script src="js/tasks.js"></script>
+    <script src="js/trash.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

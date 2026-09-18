@@ -1,11 +1,10 @@
 import { useState } from "react";
 import { useUI } from "../../../state/ui";
 import { useNav } from "../../../state/nav";
-import { useProspecting, STATUS_LABELS } from "../prospectingState";
-import type { ProspectStatus, Sprint } from "../prospecting.types";
-import { SimpleModal } from "../../../components/ui/SimpleModal";
-
-const STATUS_ORDER: ProspectStatus[] = ["not-contacted", "contacted", "interested", "not-interested"];
+import { useProspecting } from "../prospectingState";
+import { PROSPECT_STATUSES, STATUS_LABELS } from "../prospecting.types";
+import type { Sprint } from "../prospecting.types";
+import { Modal } from "../../../components/modals/Modal";
 
 function SprintView({ sprint }: { sprint: Sprint }) {
   const { data, createProspect, updateProspect, deleteProspect, setSprintDescription } = useProspecting();
@@ -23,7 +22,7 @@ function SprintView({ sprint }: { sprint: Sprint }) {
         rows={1}
         placeholder="Sprint description..."
         defaultValue={sprint.description}
-        onChange={(e) => setSprintDescription(sprint.id, e.target.value)}
+        onBlur={(e) => setSprintDescription(sprint.id, e.target.value)}
       />
 
       <div className="border-t hairline my-4" />
@@ -55,13 +54,13 @@ function SprintView({ sprint }: { sprint: Sprint }) {
       </div>
 
       {open && (
-        <SimpleModal title={open.companyName} onClose={() => setOpenId(null)}>
+        <Modal title={open.companyName} onClose={() => setOpenId(null)}>
           <div className="field-form">
             <div className="modal-label">Company Name</div>
             <input
               className="input w-full"
               defaultValue={open.companyName}
-              onChange={(e) => updateProspect(open.id, { companyName: e.target.value })}
+              onBlur={(e) => updateProspect(open.id, { companyName: e.target.value })}
             />
           </div>
           <div className="field-form">
@@ -69,13 +68,13 @@ function SprintView({ sprint }: { sprint: Sprint }) {
             <input
               className="input w-full"
               defaultValue={open.website}
-              onChange={(e) => updateProspect(open.id, { website: e.target.value })}
+              onBlur={(e) => updateProspect(open.id, { website: e.target.value })}
             />
           </div>
           <div className="field-form">
             <div className="modal-label">Status</div>
             <div className="flex flex-wrap gap-1.5">
-              {STATUS_ORDER.map((s) => (
+              {PROSPECT_STATUSES.map((s) => (
                 <button
                   key={s}
                   className={
@@ -95,7 +94,7 @@ function SprintView({ sprint }: { sprint: Sprint }) {
               className="notes-area !min-h-[70px]"
               placeholder="Contact details, notes..."
               defaultValue={open.notes}
-              onChange={(e) => updateProspect(open.id, { notes: e.target.value })}
+              onBlur={(e) => updateProspect(open.id, { notes: e.target.value })}
             />
           </div>
           <div className="flex justify-between items-center mt-4">
@@ -112,7 +111,7 @@ function SprintView({ sprint }: { sprint: Sprint }) {
             </button>
             <button className="btn btn-ghost" onClick={() => setOpenId(null)}>Close</button>
           </div>
-        </SimpleModal>
+        </Modal>
       )}
     </div>
   );

@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { useStore } from "../../../state/store";
+import { useStoreState } from "../../../state/store";
 import { useTeam } from "../../team/teamState";
 import { financeForMonth, monthLabel } from "../finance.service";
 import { formatINR } from "../../../lib/currency";
 
 export function FinanceView() {
-  const { state } = useStore();
+  const state = useStoreState();
   const { data: team } = useTeam();
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());

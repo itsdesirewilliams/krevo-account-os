@@ -1,5 +1,4 @@
-import { useStore } from "../state/store";
-import type { Account } from "../types";
+import { useStoreActions, useStoreState } from "../state/store";
 import { isOverview } from "../types";
 import { OverviewSheet } from "./OverviewSheet";
 import { CustomSheetView } from "./CustomSheet";
@@ -12,7 +11,8 @@ import { CustomSheetView } from "./CustomSheet";
  * inputs remount with the correct account's data.)
  */
 export function Workspace({ accountId }: { accountId: string }) {
-  const { state, renameAccount, setDescription } = useStore();
+  const state = useStoreState();
+  const { renameAccount, setDescription } = useStoreActions();
   const account = state.accounts.find((a) => a.id === accountId);
   if (!account) return null;
 
@@ -37,7 +37,7 @@ export function Workspace({ accountId }: { accountId: string }) {
           rows={2}
           placeholder="Add an account description..."
           defaultValue={account.description}
-          onChange={(e) => setDescription(account.id, e.target.value)}
+          onBlur={(e) => setDescription(account.id, e.target.value)}
         />
       </div>
 
@@ -46,15 +46,9 @@ export function Workspace({ accountId }: { accountId: string }) {
       {/* key={sheet.id}: sheet content remounts when the active sheet changes */}
       {sheet && (
         <div key={sheet.id}>
-          {isOverview(sheet) ? (
-            <OverviewSheet account={account as Account} />
-          ) : (
-            <CustomSheetView account={account} sheet={sheet} />
-          )}
+          {isOverview(sheet) ? <OverviewSheet account={account} /> : <CustomSheetView account={account} sheet={sheet} />}
         </div>
       )}
     </div>
   );
 }
-
-

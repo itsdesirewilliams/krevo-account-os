@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { useStore } from "../../state/store";
+import { useStoreActions, useStoreState } from "../../state/store";
 import { useUI } from "../../state/ui";
 import { formatDate } from "../../lib/dates";
 import { overviewOf } from "../../types";
-import { Modal, useEscape } from "./Modal";
-import { CheckIcon, CloseIcon } from "../Icons";
+import { Modal } from "./Modal";
+import { CheckIcon } from "../Icons";
+import { TaskInput, TaskRow } from "../ui/TaskRow";
 import {
   PLANS,
   getPlan,
@@ -19,7 +20,6 @@ function PromptDialog() {
   const ui = useUI();
   const d = ui.dialog;
   const [value, setValue] = useState(d?.kind === "prompt" ? d.value : "");
-  useEscape(() => undefined);
   if (!d || d.kind !== "prompt") return null;
 
   const submit = () => {
@@ -55,7 +55,6 @@ function PromptDialog() {
 function ConfirmDialog() {
   const ui = useUI();
   const d = ui.dialog;
-  useEscape(() => undefined);
   if (!d || d.kind !== "confirm") return null;
   return (
     <Modal title="Please confirm" onClose={ui.closeDialog}>
@@ -78,10 +77,9 @@ function ConfirmDialog() {
 
 /* ---------------- New Account ---------------- */
 function NewAccountDialog() {
-  const { createAccount } = useStore();
+  const { createAccount } = useStoreActions();
   const ui = useUI();
   const [name, setName] = useState("");
-  useEscape(() => undefined);
   return (
     <Modal title="New Account" onClose={ui.closeDialog}>
       <div className="field-form">
@@ -119,10 +117,9 @@ function NewAccountDialog() {
 
 /* ---------------- New Sheet ---------------- */
 function NewSheetDialog({ accountId }: { accountId: string }) {
-  const { createSheet } = useStore();
+  const { createSheet } = useStoreActions();
   const ui = useUI();
   const [name, setName] = useState("");
-  useEscape(() => undefined);
   return (
     <Modal title="New Sheet" onClose={ui.closeDialog}>
       <div className="field-form">
@@ -159,14 +156,13 @@ function NewSheetDialog({ accountId }: { accountId: string }) {
 }
 /* ---------------- New Project (form with real date picker) ---------------- */
 function NewProjectDialog({ accountId }: { accountId: string }) {
-  const { createProject } = useStore();
+  const { createProject } = useStoreActions();
   const ui = useUI();
   const [projectName, setProjectName] = useState("");
   const [eventName, setEventName] = useState("");
   const [charges, setCharges] = useState("");
   const [eventDate, setEventDate] = useState("");
   const [planId, setPlanId] = useState<string | null>(null);
-  useEscape(() => undefined);
 
   const valid = projectName.trim() && eventName.trim() && charges.trim() && eventDate;
 
@@ -237,11 +233,11 @@ function NewProjectDialog({ accountId }: { accountId: string }) {
 }
 /* ---------------- Project modal (details + To-Do) ---------------- */
 function ProjectDialog({ accountId, projectId }: { accountId: string; projectId: string }) {
-  const store = useStore();
+  const state = useStoreState();
+  const store = useStoreActions();
   const ui = useUI();
-  useEscape(() => undefined);
 
-  const account = store.state.accounts.find((a) => a.id === accountId);
+  const account = state.accounts.find((a) => a.id === accountId);
   const overview = overviewOf(account ?? null);
   const project = overview ? overview.projects.find((p) => p.id === projectId) : undefined;
   if (!account || !project) return null;
@@ -253,7 +249,7 @@ function ProjectDialog({ accountId, projectId }: { accountId: string; projectId:
         <input
           className="input w-full"
           defaultValue={project.projectName}
-          onChange={(e) => store.setProjectField(accountId, projectId, "projectName", e.target.value)}
+          onBlur={(e) => store.setProjectField(accountId, projectId, "projectName", e.target.value)}
         />
       </div>
       <div className="field-form">
@@ -261,7 +257,7 @@ function ProjectDialog({ accountId, projectId }: { accountId: string; projectId:
         <input
           className="input w-full"
           defaultValue={project.eventName}
-          onChange={(e) => store.setProjectField(accountId, projectId, "eventName", e.target.value)}
+          onBlur={(e) => store.setProjectField(accountId, projectId, "eventName", e.target.value)}
         />
       </div>
       <div className="field-form">
@@ -269,7 +265,7 @@ function ProjectDialog({ accountId, projectId }: { accountId: string; projectId:
         <input
           className="input w-full"
           defaultValue={project.charges}
-          onChange={(e) => store.setProjectField(accountId, projectId, "charges", e.target.value)}
+          onBlur={(e) => store.setProjectField(accountId, projectId, "charges", e.target.value)}
         />
       </div>
       <div className="field-form">
@@ -372,47 +368,22 @@ function ProjectTasks({
   projectId: string;
   tasks: { id: string; text: string; completed: boolean }[];
 }) {
-  const store = useStore();
+  const store = useStoreActions();
   return (
     <div>
       <div className="flex flex-col">
         {tasks.map((t) => (
-          <div key={t.id} className="flex items-center gap-2.5 py-1 group">
-            <button
-              className={"check" + (t.completed ? " on" : "")}
-              onClick={() => store.toggleProjectTask(accountId, projectId, t.id)}
-            >
-              <CheckIcon />
-            </button>
-            <input
-              className={
-                "flex-1 bg-transparent border-0 outline-none text-[13.5px] min-w-0 " +
-                (t.completed ? "line-through text-dim" : "text-text")
-              }
-              defaultValue={t.text}
-              onChange={(e) => store.setProjectTaskText(accountId, projectId, t.id, e.target.value)}
-            />
-            <button
-              className="icon-btn opacity-0 group-hover:opacity-100"
-              onClick={() => store.deleteProjectTask(accountId, projectId, t.id)}
-              title="Delete task"
-            >
-              <CloseIcon size={11} />
-            </button>
-          </div>
+          <TaskRow
+            key={t.id}
+            text={t.text}
+            completed={t.completed}
+            onToggle={() => store.toggleProjectTask(accountId, projectId, t.id)}
+            onCommitText={(v) => store.setProjectTaskText(accountId, projectId, t.id, v)}
+            onDelete={() => store.deleteProjectTask(accountId, projectId, t.id)}
+          />
         ))}
       </div>
-      <input
-        className="task-input"
-        placeholder="+ Add Task"
-        onKeyDown={(e) => {
-          const el = e.currentTarget;
-          if (e.key === "Enter" && el.value.trim()) {
-            store.addProjectTask(accountId, projectId, el.value);
-            el.value = "";
-          }
-        }}
-      />
+      <TaskInput onAdd={(text) => store.addProjectTask(accountId, projectId, text)} />
     </div>
   );
 }

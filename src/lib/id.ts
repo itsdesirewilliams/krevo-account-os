@@ -1,2 +1,2 @@
-export const genId = (): string =>
-  "id_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
+/** Collision-proof id from the platform crypto API. */
+export const genId = (): string => globalThis.crypto.randomUUID();

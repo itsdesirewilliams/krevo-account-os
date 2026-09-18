@@ -6,16 +6,15 @@ export function formatDate(iso: string): string {
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 }
 
+/** Current instant as ISO 8601 (UTC) - used for record metadata. */
 export function nowIso(): string {
   return new Date().toISOString();
 }
 
-/** Format charges for display: numeric values get the rupee symbol and Indian grouping. */
-export function formatCharges(charges: string): string {
-  const raw = (charges ?? "").trim();
-  if (!raw) return "";
-  if (/^[0-9]+(\.[0-9]+)?$/.test(raw)) {
-    return "\u20B9" + Number(raw).toLocaleString("en-IN", { maximumFractionDigits: 2 });
-  }
-  return raw;
+/** Today's LOCAL calendar date as ISO yyyy-mm-dd - used for date inputs. */
+export function todayLocalIso(): string {
+  const d = new Date();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${month}-${day}`;
 }

@@ -1,9 +1,10 @@
-import { useStore } from "../state/store";
+import { useStoreActions, useStoreState } from "../state/store";
 import { useUI } from "../state/ui";
 import { isOverview } from "../types";
 
 export function SheetBar() {
-  const { state, activateSheet, deleteSheet, renameSheet } = useStore();
+  const state = useStoreState();
+  const { activateSheet, deleteSheet, renameSheet } = useStoreActions();
   const ui = useUI();
   const account = state.accounts.find((a) => a.id === state.activeAccountId);
   if (!account || state.showTrash) return null;

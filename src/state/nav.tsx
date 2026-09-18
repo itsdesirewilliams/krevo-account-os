@@ -4,23 +4,36 @@
  */
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { defaultNav, SECTIONS, type NavData, type Section } from "../app/navigation";
+import type { AccountColorFilter } from "../types";
 import { usePersistentState } from "./persist";
 
 const NAV_KEY = "krevo_nav_v1";
+
+const COLOR_FILTERS: AccountColorFilter[] = ["all", "green", "yellow", "red", "none"];
 
 function normalizeNav(raw: unknown): NavData {
   const base = defaultNav();
   if (!raw || typeof raw !== "object") return base;
   const r = raw as Partial<NavData>;
+
   const expanded = { ...base.expanded };
-  for (const s of SECTIONS) if (typeof r.expanded?.[s] === "boolean") expanded[s] = r.expanded[s]!;
+  if (r.expanded && typeof r.expanded === "object") {
+    const rawExpanded = r.expanded as Partial<Record<Section, boolean>>;
+    for (const section of SECTIONS) {
+      const value = rawExpanded[section];
+      if (typeof value === "boolean") expanded[section] = value;
+    }
+  }
+
+  const asId = (value: unknown): string | null => (typeof value === "string" && value ? value : null);
+
   return {
-    activeSection: r.activeSection && SECTIONS.includes(r.activeSection) ? r.activeSection : "accounts",
+    activeSection: SECTIONS.find((s) => s === r.activeSection) ?? base.activeSection,
     expanded,
-    teamMemberId: r.teamMemberId ?? null,
-    sprintId: r.sprintId ?? null,
-           socialAccountId: r.socialAccountId ?? null,
-    accountColorFilter: r.accountColorFilter ?? "all",
+    teamMemberId: asId(r.teamMemberId),
+    sprintId: asId(r.sprintId),
+    socialAccountId: asId(r.socialAccountId),
+    accountColorFilter: COLOR_FILTERS.find((f) => f === r.accountColorFilter) ?? "all",
   };
 }
 
@@ -29,13 +42,13 @@ export interface Nav {
   teamMemberId: string | null;
   sprintId: string | null;
   socialAccountId: string | null;
-  accountColorFilter: "all" | "green" | "yellow" | "red" | "none";
+  accountColorFilter: AccountColorFilter;
   setActiveSection: (s: Section) => void;
   toggleSection: (s: Section) => void;
   selectMember: (id: string | null) => void;
   selectSprint: (id: string | null) => void;
   selectSocialAccount: (id: string | null) => void;
-  setAccountColorFilter: (filter: "all" | "green" | "yellow" | "red" | "none") => void;
+  setAccountColorFilter: (filter: AccountColorFilter) => void;
 }
 
 const NavContext = createContext<Nav | null>(null);
@@ -45,7 +58,7 @@ export function NavProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<Nav>(
     () => ({
-            nav,
+      nav,
       teamMemberId: nav.teamMemberId,
       sprintId: nav.sprintId,
       socialAccountId: nav.socialAccountId,
@@ -62,7 +75,7 @@ export function NavProvider({ children }: { children: ReactNode }) {
       selectSprint(id) {
         setNav((n) => ({ ...n, sprintId: id, activeSection: "prospecting" }));
       },
-            selectSocialAccount(id) {
+      selectSocialAccount(id) {
         setNav((n) => ({ ...n, socialAccountId: id, activeSection: "content" }));
       },
       setAccountColorFilter(filter) {

@@ -1,98 +1,74 @@
 /*
  * Persistence layer (abstracted).
  *
- * The application only talks to the StorageDriver interface below, never to
- * a concrete browser or OS API. During browser development the
- * BrowserStorageDriver (localStorage) is active. When packaged with Tauri the
- * TauriStorageDriver takes over transparently and stores the state as a JSON
- * file in the OS app-data directory via two Rust commands:
+ * Features only ever talk to the StorageDriver interface below - never to a
+ * browser or OS API directly - so a desktop driver can be added behind the same
+ * interface without touching feature code.
  *
- *     load_state() -> Option<String>          (raw JSON or null)
- *     save_state(json: String)
- *
- * Swapping drivers requires no changes anywhere else in the codebase.
+ * Every failure is reported through `onStorageError` so the UI can surface it;
+ * persistence never fails silently.
  */
 
 export interface StorageDriver {
+  /** Resolve to the stored value, or null when nothing has been stored yet. */
   load(key: string): Promise<unknown>;
   save(key: string, value: unknown): Promise<void>;
-  remove(key: string): Promise<void>;
+  /** Synchronous best-effort write, used to flush pending edits on exit. */
+  flush(key: string, value: unknown): void;
 }
 
 export const STORAGE_KEY = "krevo_state_v2";
 
-export const isTauri = (): boolean =>
-  typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+export interface StorageError {
+  message: string;
+}
 
-/* ---------------- Browser (development) ---------------- */
+let errorHandler: ((error: StorageError) => void) | null = null;
+
+/** Subscribe to persistence failures (see StorageBanner). */
+export function onStorageError(handler: ((error: StorageError) => void) | null): void {
+  errorHandler = handler;
+}
+
+function report(message: string, cause: unknown): void {
+  console.error("[storage] " + message, cause);
+  errorHandler?.({ message });
+}
 
 const BrowserStorageDriver: StorageDriver = {
   async load(key) {
+    let raw: string | null;
     try {
-      const raw = localStorage.getItem(key);
-      return raw == null ? null : JSON.parse(raw);
-    } catch {
-      return null;
+      raw = localStorage.getItem(key);
+    } catch (cause) {
+      report("Could not read local storage.", cause);
+      throw cause;
+    }
+    if (raw == null) return null;
+    try {
+      return JSON.parse(raw) as unknown;
+    } catch (cause) {
+      // Unreadable data is left untouched so it can still be recovered by hand.
+      report("Stored data is unreadable and was left untouched.", cause);
+      throw cause;
     }
   },
+
   async save(key, value) {
     try {
       localStorage.setItem(key, JSON.stringify(value));
-    } catch {
-      /* storage full / unavailable - ignore */
+    } catch (cause) {
+      report("Changes could not be saved locally.", cause);
     }
   },
-  async remove(key) {
+
+  flush(key, value) {
     try {
-      localStorage.removeItem(key);
-    } catch {
-      /* ignore */
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch (cause) {
+      report("Changes could not be saved before closing.", cause);
     }
   },
 };
 
-/* ---------------- Tauri (desktop) ---------------- */
-
-type InvokeFn = (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
-
-async function getInvoke(): Promise<InvokeFn | null> {
-  try {
-    const core = await import("@tauri-apps/api/core");
-    return core.invoke as InvokeFn;
-  } catch {
-    return null;
-  }
-}
-
-const TauriStorageDriver: StorageDriver = {
-  async load(_key) {
-    const invoke = await getInvoke();
-    if (!invoke) return null;
-    try {
-      const raw = (await invoke("load_state")) as string | null;
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
-  },
-  async save(_key, value) {
-    const invoke = await getInvoke();
-    if (!invoke) return;
-    try {
-      await invoke("save_state", { json: JSON.stringify(value) });
-    } catch {
-      /* ignore until the Rust commands are wired up */
-    }
-  },
-  async remove(_key) {
-    const invoke = await getInvoke();
-    if (!invoke) return;
-    try {
-      await invoke("remove_state");
-    } catch {
-      /* ignore */
-    }
-  },
-};
-
-export const storage: StorageDriver = isTauri() ? TauriStorageDriver : BrowserStorageDriver;
+export const storage: StorageDriver = BrowserStorageDriver;

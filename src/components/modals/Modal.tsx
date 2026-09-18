@@ -1,11 +1,12 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import gsap from "gsap";
-import { useUI } from "../../state/ui";
+import { useEscapeLayer } from "../../lib/useEscapeLayer";
 import { CloseIcon } from "../Icons";
 
 /**
- * Base floating modal: dimmed overlay (workspace stays visible behind),
- * Escape to close, GSAP entrance animation.
+ * Floating modal: dimmed overlay (workspace stays visible behind), Escape to
+ * close, GSAP entrance animation. Used by both the global dialog system and
+ * feature-local forms.
  */
 export function Modal({
   title,
@@ -19,6 +20,7 @@ export function Modal({
   children: ReactNode;
 }) {
   const cardRef = useRef<HTMLDivElement>(null);
+  useEscapeLayer(onClose);
 
   useEffect(() => {
     if (cardRef.current) {
@@ -48,17 +50,4 @@ export function Modal({
       </div>
     </div>
   );
-}
-
-/** Convenience hook for Escape-key dismissal inside a modal. */
-export function useEscape(onClose: () => void) {
-  const close = useUI().closeDialog;
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [close]);
-  void onClose;
 }

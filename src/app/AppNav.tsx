@@ -1,13 +1,14 @@
-import { useEffect, useRef, useState } from "react";
-import { useStore } from "../state/store";
+import { useCallback, useRef, useState } from "react";
+import { useStoreActions, useStoreState } from "../state/store";
 import { useNav } from "../state/nav";
 import { useUI } from "../state/ui";
 import { useTeam } from "../features/team/teamState";
 import { useProspecting } from "../features/prospecting/prospectingState";
 import { useContent } from "../features/content/contentState";
+import { useDismissOnOutsideClick } from "../lib/useDismissOnOutsideClick";
 import { SECTIONS, type Section } from "./navigation";
 import { TrashIcon, PlusIcon, FolderIcon } from "../components/Icons";
-import { ACCOUNT_COLORS } from "../types";
+import { ACCOUNT_COLORS, type AccountColorFilter } from "../types";
 
 const LABELS: Record<Section, string> = {
   accounts: "ACCOUNTS",
@@ -17,63 +18,53 @@ const LABELS: Record<Section, string> = {
   finance: "FINANCE",
 };
 
+const COLOR_FILTERS: { id: string; label: string; value: AccountColorFilter }[] = [
+  { id: "all", label: "All", value: "all" },
+  { id: "green", label: "Green", value: "green" },
+  { id: "yellow", label: "Yellow", value: "yellow" },
+  { id: "red", label: "Red", value: "red" },
+  { id: "none", label: "No Color", value: "none" },
+];
+
 export function AppNav() {
-    const { state, openAccount, showTrash, hideTrash, setAccountColor } = useStore();
-    const { nav, setActiveSection, selectMember, selectSprint, selectSocialAccount, accountColorFilter, setAccountColorFilter } = useNav();
+  const state = useStoreState();
+  const { openAccount, showTrash, hideTrash, setAccountColor } = useStoreActions();
+  const {
+    nav,
+    setActiveSection,
+    selectMember,
+    selectSprint,
+    selectSocialAccount,
+    accountColorFilter,
+    setAccountColorFilter,
+  } = useNav();
   const ui = useUI();
   const team = useTeam();
   const prospecting = useProspecting();
   const content = useContent();
 
-      const [menuOpen, setMenuOpen] = useState(false);
-    const menuRef = useRef<HTMLDivElement>(null);
-    const [filterOpen, setFilterOpen] = useState(false);
-    const filterRef = useRef<HTMLDivElement>(null);
-
-    // Close the module dropdown when clicking anywhere else.
-  useEffect(() => {
-    if (!menuOpen) return;
-    const close = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
-    };
-    const timer = window.setTimeout(() => document.addEventListener("mousedown", close), 0);
-    return () => {
-      window.clearTimeout(timer);
-      document.removeEventListener("mousedown", close);
-    };
-  }, [menuOpen]);
-
-  // Close the filter dropdown when clicking anywhere else.
-  useEffect(() => {
-    if (!filterOpen) return;
-    const close = (e: MouseEvent) => {
-      if (filterRef.current && !filterRef.current.contains(e.target as Node)) setFilterOpen(false);
-    };
-    const timer = window.setTimeout(() => document.addEventListener("mousedown", close), 0);
-    return () => {
-      window.clearTimeout(timer);
-      document.removeEventListener("mousedown", close);
-    };
-  }, [filterOpen]);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const filterRef = useRef<HTMLDivElement>(null);
+  const closeMenu = useCallback(() => setMenuOpen(false), []);
+  const closeFilter = useCallback(() => setFilterOpen(false), []);
+  useDismissOnOutsideClick(menuRef, menuOpen, closeMenu);
+  useDismissOnOutsideClick(filterRef, filterOpen, closeFilter);
 
   const pickModule = (s: Section) => {
     setActiveSection(s);
     setMenuOpen(false);
   };
 
-    const people = team.members.filter((m) => m.type === "person");
+  const people = team.members.filter((m) => m.type === "person");
   const tools = team.members.filter((m) => m.type === "tool");
-  const COLOR_FILTERS: { id: string; label: string; value: string }[] = [
-    { id: "all", label: "All", value: "all" },
-    { id: "green", label: "Green", value: "green" },
-    { id: "yellow", label: "Yellow", value: "yellow" },
-    { id: "red", label: "Red", value: "red" },
-  ];
   const trashCount = state.trash.accounts.length + state.trash.sheets.length;
   const active = nav.activeSection;
   const filterLabel = COLOR_FILTERS.find((f) => f.value === accountColorFilter)?.label ?? "All";
-  const visibleAccounts =
-    state.accounts.filter((a) => (accountColorFilter === "all" ? true : (a.color ?? "none") === accountColorFilter));
+  const visibleAccounts = state.accounts.filter((a) =>
+    accountColorFilter === "all" ? true : (a.color ?? "none") === accountColorFilter,
+  );
 
   return (
     <aside className="w-56 shrink-0 border-r hairline bg-panel flex flex-col min-h-0 overflow-y-auto py-2">
@@ -89,11 +80,7 @@ export function AppNav() {
         {menuOpen && (
           <div className="module-menu">
             {SECTIONS.map((s) => (
-              <div
-                key={s}
-                className={"menu-item" + (s === active ? " on" : "")}
-                onClick={() => pickModule(s)}
-              >
+              <div key={s} className={"menu-item" + (s === active ? " on" : "")} onClick={() => pickModule(s)}>
                 {LABELS[s]}
               </div>
             ))}
@@ -103,11 +90,9 @@ export function AppNav() {
 
       {/* Only the ACTIVE module's navigation is rendered below the selector. */}
 
-                  {active === "accounts" && (
+      {active === "accounts" && (
         <div className="nav-section-children">
-          {visibleAccounts.length === 0 && (
-            <div className="nav-item text-dim">No accounts.</div>
-          )}
+          {visibleAccounts.length === 0 && <div className="nav-item text-dim">No accounts.</div>}
           {visibleAccounts.map((a) => {
             const folderColorClass = {
               none: "folder-neutral",
@@ -122,13 +107,16 @@ export function AppNav() {
                 onClick={() => openAccount(a.id)}
                 onContextMenu={(e) => {
                   e.preventDefault();
-                  ui.openMenu(e.clientX, e.clientY, [
-                    { label: "Set Color →", action: () => {} },
-                    ...ACCOUNT_COLORS.map((cc) => ({
+                  ui.openMenu(
+                    e.clientX,
+                    e.clientY,
+                    ACCOUNT_COLORS.map((cc) => ({
                       label: cc === "none" ? "No Color" : cc.charAt(0).toUpperCase() + cc.slice(1),
-                      action: () => { setAccountColor(a.id, cc); },
+                      action: () => {
+                        setAccountColor(a.id, cc);
+                      },
                     })),
-                  ]);
+                  );
                 }}
               >
                 <FolderIcon size={14} className={"ficon " + folderColorClass} />
@@ -136,10 +124,7 @@ export function AppNav() {
               </div>
             );
           })}
-                    <button
-            className="nav-item text-[color:var(--accent)]"
-            onClick={ui.newAccount}
-          >
+          <button className="nav-item text-[color:var(--accent)]" onClick={ui.newAccount}>
             <PlusIcon size={13} />
             <span>New Account</span>
           </button>
@@ -156,10 +141,7 @@ export function AppNav() {
 
           <div className="px-2 pt-1 pb-2">
             <div ref={filterRef} className="relative">
-              <button
-                className="nav-item w-full justify-between"
-                onClick={() => setFilterOpen((v) => !v)}
-              >
+              <button className="nav-item w-full justify-between" onClick={() => setFilterOpen((v) => !v)}>
                 <span>FILTER: {filterLabel}</span>
                 <span className="nav-ctrl">{filterOpen ? "▾" : "▸"}</span>
               </button>
@@ -170,7 +152,7 @@ export function AppNav() {
                       key={f.id}
                       className={"menu-item" + (accountColorFilter === f.value ? " on" : "")}
                       onClick={() => {
-                        setAccountColorFilter(f.value as "all" | "green" | "yellow" | "red" | "none");
+                        setAccountColorFilter(f.value);
                         setFilterOpen(false);
                       }}
                     >
@@ -183,7 +165,6 @@ export function AppNav() {
           </div>
         </div>
       )}
-
 
       {active === "team" && (
         <div className="nav-section-children">
@@ -211,10 +192,7 @@ export function AppNav() {
               <span className="flex-1 truncate">{m.name}</span>
             </div>
           ))}
-          <button
-            className="nav-item text-[color:var(--accent)]"
-            onClick={team.openMemberForm}
-          >
+          <button className="nav-item text-[color:var(--accent)]" onClick={team.openMemberForm}>
             <PlusIcon size={13} />
             <span>Add Team Member</span>
           </button>
@@ -261,5 +239,3 @@ export function AppNav() {
     </aside>
   );
 }
-
-

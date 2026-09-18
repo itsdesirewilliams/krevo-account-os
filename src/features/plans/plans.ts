@@ -5,7 +5,6 @@
  * the UI derives social requirements from the plan definition. New plans
  * can be added here without touching components.
  */
-import type { Project } from "../../types";
 
 export type DeliverableId = "collab-repost" | "promo-flyer";
 
@@ -65,12 +64,3 @@ export const defaultDeliverables = (planId: string | null): ProjectDeliverables 
   return d;
 };
 
-export const deliverablesForProject = (project: Pick<Project, "planId" | "deliverables">): ProjectDeliverables | null => {
-  if (project.deliverables) {
-    return {
-      "collab-repost": !!project.deliverables["collab-repost"],
-      "promo-flyer": !!project.deliverables["promo-flyer"],
-    };
-  }
-  return defaultDeliverables(project.planId ?? null);
-};

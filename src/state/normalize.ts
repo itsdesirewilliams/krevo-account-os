@@ -4,7 +4,7 @@
  * legacy (V2) custom sheets that carried notes/tasks directly on the sheet.
  */
 import { genId } from "../lib/id";
-import type { Account, AppState, Block, CustomSheet, Project, Sheet, Task } from "../types";
+import { isOverview, type Account, type AppState, type Block, type Project, type Sheet, type Task, type Trash, type TrashSheetEntry } from "../types";
 
 function normalizeTask(t: Partial<Task>): Task {
   return {
@@ -27,14 +27,19 @@ function normalizeProject(p: Partial<Project>): Project {
   };
 }
 
-function normalizeBlock(b: Partial<Block> & { notes?: unknown; tasks?: unknown }): Block {
-  const out: Block = { id: b.id || genId(), type: b.type === "todo" ? "todo" : "notes" };
-  if (out.type === "todo") {
-    out.tasks = Array.isArray(b.tasks) ? (b.tasks as Partial<Task>[]).map(normalizeTask) : [];
-  } else {
-    out.text = (b.text as string) == null ? "" : (b.text as string);
+interface RawBlock {
+  id?: string;
+  type?: unknown;
+  text?: unknown;
+  tasks?: unknown;
+}
+
+function normalizeBlock(b: RawBlock): Block {
+  const id = b.id || genId();
+  if (b.type === "todo") {
+    return { id, type: "todo", tasks: Array.isArray(b.tasks) ? (b.tasks as Partial<Task>[]).map(normalizeTask) : [] };
   }
-  return out;
+  return { id, type: "notes", text: typeof b.text === "string" ? b.text : "" };
 }
 
 interface RawSheet {
@@ -46,32 +51,58 @@ interface RawSheet {
   tasks?: unknown;
 }
 
-function normalizeSheet(input: unknown): Sheet {
-  const s: RawSheet = input && typeof input === "object" ? (input as RawSheet) : {};
-  const base = { id: s.id || genId(), name: s.name == null ? "Untitled" : s.name };
-  if (s.projects != null || (s.blocks == null && s.notes == null && s.tasks == null && Object.prototype.hasOwnProperty.call(s, "projects"))) {
-    const projects = Array.isArray(s.projects) ? (s.projects as Partial<Project>[]) : [];
-    return { ...base, projects: projects.map(normalizeProject) };
-  }
-  // Custom freeform sheet -> blocks array (with V2 legacy migration).
-  const blocks: (Partial<Block> & { notes?: unknown; tasks?: unknown })[] = Array.isArray(s.blocks)
-    ? [...(s.blocks as (Partial<Block> & { notes?: unknown; tasks?: unknown })[])]
-    : [];
-  if (s.notes != null) blocks.push({ id: genId(), type: "notes", text: s.notes as string });
-  if (Array.isArray(s.tasks) && s.tasks.length)
-    blocks.push({ id: genId(), type: "todo", tasks: (s.tasks as Partial<Task>[]).map(normalizeTask) });
-  return { ...base, blocks: blocks.map(normalizeBlock) } as CustomSheet;
+function isOverviewRaw(s: RawSheet): boolean {
+  return (
+    s.projects != null ||
+    (s.blocks == null && s.notes == null && s.tasks == null && Object.prototype.hasOwnProperty.call(s, "projects"))
+  );
 }
 
+function normalizeSheet(input: unknown): Sheet {
+  const s: RawSheet = input && typeof input === "object" ? (input as RawSheet) : {};
+  const id = s.id || genId();
+  const name = s.name == null ? "Untitled" : s.name;
+
+  if (isOverviewRaw(s)) {
+    const projects = Array.isArray(s.projects) ? (s.projects as Partial<Project>[]) : [];
+    return { id, name, projects: projects.map(normalizeProject) };
+  }
+
+  // Custom freeform sheet -> blocks array (with V2 legacy migration).
+  const blocks: RawBlock[] = Array.isArray(s.blocks) ? [...(s.blocks as RawBlock[])] : [];
+  if (s.notes != null) blocks.push({ id: genId(), type: "notes", text: s.notes as string });
+  if (Array.isArray(s.tasks) && s.tasks.length) {
+    blocks.push({ id: genId(), type: "todo", tasks: (s.tasks as Partial<Task>[]).map(normalizeTask) });
+  }
+  return { id, name, blocks: blocks.map(normalizeBlock) };
+}
 
 function normalizeAccount(a: Partial<Account>): Account {
   const color = a.color === "green" || a.color === "yellow" || a.color === "red" ? a.color : "none";
+  const sheets = Array.isArray(a.sheets) ? a.sheets.map(normalizeSheet) : [];
+  if (!sheets.some(isOverview)) {
+    // Every account owns exactly one Overview sheet, by construction.
+    sheets.unshift({ id: genId(), name: "Overview", projects: [] });
+  }
   return {
     id: a.id || genId(),
     name: a.name == null ? "Untitled" : a.name,
     description: a.description == null ? "" : a.description,
     color,
-    sheets: Array.isArray(a.sheets) ? a.sheets.map(normalizeSheet) : [],
+    sheets,
+  };
+}
+
+function normalizeTrashSheet(input: unknown): TrashSheetEntry | null {
+  if (!input || typeof input !== "object") return null;
+  const e = input as Partial<TrashSheetEntry>;
+  const sheet = normalizeSheet(e.sheet);
+  if (isOverview(sheet)) return null; // Overview sheets are never trashable
+  return {
+    id: e.id || genId(),
+    accountId: e.accountId == null ? "" : e.accountId,
+    accountName: e.accountName == null ? "" : e.accountName,
+    sheet,
   };
 }
 
@@ -87,35 +118,46 @@ export function defaultState(): AppState {
 }
 
 export function normalize(input: unknown): AppState {
-  let st: Partial<AppState> =
-    input && typeof input === "object" ? { ...(input as Partial<AppState>) } : defaultState();
+  const source = input && typeof input === "object" ? (input as Partial<AppState>) : {};
 
-  const trash = (st.trash && typeof st.trash === "object" ? st.trash : { accounts: [], sheets: [] }) as AppState["trash"];
-  st.trash = {
-    accounts: Array.isArray(trash.accounts) ? trash.accounts.map(normalizeAccount) : [],
-    sheets: Array.isArray(trash.sheets) ? trash.sheets : [],
+  const accounts = Array.isArray(source.accounts) ? source.accounts.map(normalizeAccount) : [];
+
+  const rawTrash = source.trash && typeof source.trash === "object" ? source.trash : { accounts: [], sheets: [] };
+  const trash: Trash = {
+    accounts: Array.isArray(rawTrash.accounts) ? rawTrash.accounts.map(normalizeAccount) : [],
+    sheets: Array.isArray(rawTrash.sheets)
+      ? rawTrash.sheets.map(normalizeTrashSheet).filter((entry): entry is TrashSheetEntry => entry !== null)
+      : [],
   };
-  st.accounts = Array.isArray(st.accounts) ? st.accounts.map(normalizeAccount) : [];
-  st.openTabs = Array.isArray(st.openTabs) ? st.openTabs : [];
-  st.activeAccountId = st.activeAccountId || null;
-  st.showTrash = !!st.showTrash;
-  st.activeSheetByAccount = st.activeSheetByAccount || {};
 
   // Drop stale references.
-  st.openTabs = st.openTabs.filter((id) => st.accounts!.some((a) => a.id === id));
-  if (st.activeAccountId && !st.accounts!.some((a) => a.id === st.activeAccountId)) {
-    st.activeAccountId = st.openTabs![st.openTabs!.length - 1] || null;
-  }
-  for (const accountId of Object.keys(st.activeSheetByAccount)) {
-    const account = st.accounts!.find((x) => x.id === accountId);
-    if (!account) {
-      delete st.activeSheetByAccount![accountId];
-      continue;
+  const accountIds = new Set(accounts.map((a) => a.id));
+  const openTabs = (Array.isArray(source.openTabs) ? source.openTabs : []).filter(
+    (id): id is string => typeof id === "string" && accountIds.has(id),
+  );
+  const activeAccountId =
+    typeof source.activeAccountId === "string" && accountIds.has(source.activeAccountId)
+      ? source.activeAccountId
+      : openTabs[openTabs.length - 1] ?? null;
+
+  const activeSheetByAccount: Record<string, string | null> = {};
+  if (source.activeSheetByAccount && typeof source.activeSheetByAccount === "object") {
+    for (const [accountId, selected] of Object.entries(source.activeSheetByAccount)) {
+      const account = accounts.find((a) => a.id === accountId);
+      if (!account) continue;
+      const stored = typeof selected === "string" ? selected : null;
+      let next: string | null = account.sheets[0]?.id ?? null;
+      if (stored !== null && account.sheets.some((s) => s.id === stored)) next = stored;
+      activeSheetByAccount[accountId] = next;
     }
-    const active = st.activeSheetByAccount![accountId];
-    if (!account.sheets.some((s) => s.id === active)) {
-      st.activeSheetByAccount![accountId] = account.sheets.length ? account.sheets[0].id : null;
-    }
   }
-  return st as AppState;
+
+  return {
+    accounts,
+    trash,
+    openTabs,
+    activeAccountId,
+    showTrash: !!source.showTrash,
+    activeSheetByAccount,
+  };
 }

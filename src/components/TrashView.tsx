@@ -1,8 +1,9 @@
-import { useStore } from "../state/store";
+import { useStoreActions, useStoreState } from "../state/store";
 import { useUI } from "../state/ui";
 
 export function TrashView() {
-  const { state, hideTrash, restoreAccount, purgeAccount, restoreSheet, purgeSheet, emptyTrash } = useStore();
+  const state = useStoreState();
+  const { hideTrash, restoreAccount, purgeAccount, restoreSheet, purgeSheet, emptyTrash } = useStoreActions();
   const ui = useUI();
   const empty = state.trash.accounts.length === 0 && state.trash.sheets.length === 0;
 

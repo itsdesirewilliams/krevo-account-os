@@ -21,7 +21,7 @@ import {
   updateJob,
   updateMember,
 } from "./team.repository";
-import type { Job, JobTask, MemberType, SopRef, TeamData, TeamMember } from "./team.types";
+import type { Job, MemberType, SopRef, TeamData, TeamMember } from "./team.types";
 
 interface TeamStore {
   data: TeamData;
@@ -84,5 +84,3 @@ export function useTeam(): TeamStore {
   if (!ctx) throw new Error("useTeam must be used inside TeamProvider");
   return ctx;
 }
-
-export type { JobTask };

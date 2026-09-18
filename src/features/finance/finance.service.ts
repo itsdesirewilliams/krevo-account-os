@@ -11,7 +11,7 @@
  */
 import { overviewOf } from "../../types";
 import type { Account } from "../../types";
-import { parseCharges } from "../../lib/currency";
+import { parseAmount } from "../../lib/currency";
 import type { TeamData } from "../team/team.types";
 
 export interface RevenueRow {
@@ -53,7 +53,7 @@ export function allProjects(accounts: Account[]): RevenueRow[] {
         accountName: a.name,
         projectName: p.projectName || p.eventName || "Untitled",
         eventName: p.eventName,
-        amount: parseCharges(p.charges),
+        amount: parseAmount(p.charges),
         eventDate: p.eventDate,
       });
     }
@@ -106,4 +106,4 @@ const MONTH_NAMES = [
 ];
 
 export const monthLabel = (year: number, month: number): string =>
-  `${MONTH_NAMES[month - 1]} ${year}`;
+  `${MONTH_NAMES[month - 1] ?? String(month)} ${year}`;

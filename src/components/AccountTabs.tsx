@@ -1,8 +1,9 @@
-import { useStore } from "../state/store";
+import { useStoreActions, useStoreState } from "../state/store";
 import { CloseIcon } from "./Icons";
 
 export function AccountTabs() {
-  const { state, closeTab, openAccount } = useStore();
+  const state = useStoreState();
+  const { closeTab, openAccount } = useStoreActions();
   const activeId = !state.showTrash ? state.activeAccountId : null;
 
   return (

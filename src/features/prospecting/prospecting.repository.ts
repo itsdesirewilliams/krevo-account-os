@@ -1,72 +1,114 @@
+/*
+ * Prospecting repository: pure, immutable helpers over ProspectingData.
+ * No React, no storage. Every function returns a new ProspectingData.
+ */
 import { genId } from "../../lib/id";
 import { nowIso } from "../../lib/dates";
-import type { Prospect, ProspectingData, Sprint } from "./prospecting.types";
+import {
+  PROSPECT_STATUSES,
+  type Prospect,
+  type ProspectStatus,
+  type ProspectingData,
+  type Sprint,
+} from "./prospecting.types";
 
-/** Pure logic over prospecting data. No persistence, no React. */
-export const prospectingRepository = {
-  empty(): ProspectingData {
-    return { sprints: [], prospects: [] };
-  },
+export const PROSPECTING_KEY = "krevo_prospecting";
 
-  normalize(input: unknown): ProspectingData {
-    const d = (input && typeof input === "object" ? input : {}) as Partial<ProspectingData>;
-    return {
-      sprints: Array.isArray(d.sprints) ? d.sprints : [],
-      prospects: Array.isArray(d.prospects) ? d.prospects : [],
-    };
-  },
+export function defaultProspectingData(): ProspectingData {
+  return { sprints: [], prospects: [] };
+}
 
-  createSprint(data: ProspectingData, name: string, description: string): Sprint {
-    const sprint: Sprint = { id: genId(), name: name.trim() || "Untitled Sprint", description: description.trim(), createdAt: nowIso() };
-    data.sprints.push(sprint);
-    return sprint;
-  },
+const isStatus = (value: unknown): value is ProspectStatus =>
+  PROSPECT_STATUSES.includes(value as ProspectStatus);
 
-  renameSprint(data: ProspectingData, id: string, name: string): void {
-    const s = data.sprints.find((x) => x.id === id);
-    if (s && name.trim()) s.name = name.trim();
-  },
+function normalizeSprint(raw: unknown): Sprint {
+  const s = (raw && typeof raw === "object" ? raw : {}) as Partial<Sprint>;
+  return {
+    id: s.id || genId(),
+    name: s.name == null ? "Untitled Sprint" : s.name,
+    description: s.description == null ? "" : s.description,
+    createdAt: s.createdAt || nowIso(),
+  };
+}
 
-  setSprintDescription(data: ProspectingData, id: string, description: string): void {
-    const s = data.sprints.find((x) => x.id === id);
-    if (s) s.description = description;
-  },
+function normalizeProspect(raw: unknown): Prospect {
+  const p = (raw && typeof raw === "object" ? raw : {}) as Partial<Prospect>;
+  return {
+    id: p.id || genId(),
+    sprintId: p.sprintId || "",
+    companyName: p.companyName == null ? "" : p.companyName,
+    website: p.website == null ? "" : p.website,
+    notes: p.notes == null ? "" : p.notes,
+    status: isStatus(p.status) ? p.status : "not-contacted",
+    createdAt: p.createdAt || nowIso(),
+  };
+}
 
-  deleteSprint(data: ProspectingData, id: string): void {
-    data.sprints = data.sprints.filter((s) => s.id !== id);
-    data.prospects = data.prospects.filter((p) => p.sprintId !== id);
-  },
+/** Repairs any missing fields and drops prospects whose sprint is gone. */
+export function normalizeProspectingData(raw: unknown): ProspectingData {
+  const d = (raw && typeof raw === "object" ? raw : {}) as { sprints?: unknown; prospects?: unknown };
+  const sprints = Array.isArray(d.sprints) ? d.sprints.map(normalizeSprint) : [];
+  const sprintIds = new Set(sprints.map((s) => s.id));
+  const prospects = Array.isArray(d.prospects)
+    ? d.prospects.map(normalizeProspect).filter((p) => sprintIds.has(p.sprintId))
+    : [];
+  return { sprints, prospects };
+}
 
-  prospectsOf(data: ProspectingData, sprintId: string): Prospect[] {
-    return data.prospects.filter((p) => p.sprintId === sprintId);
-  },
+export function createSprint(data: ProspectingData, name: string, description: string): ProspectingData {
+  const sprint: Sprint = {
+    id: genId(),
+    name: name.trim() || "Untitled Sprint",
+    description: description.trim(),
+    createdAt: nowIso(),
+  };
+  return { ...data, sprints: [...data.sprints, sprint] };
+}
 
-  createProspect(
-    data: ProspectingData,
-    sprintId: string,
-    companyName: string,
-    website = "",
-    notes = "",
-  ): Prospect {
-    const prospect: Prospect = {
-      id: genId(),
-      sprintId,
-      companyName: companyName.trim(),
-      website: website.trim(),
-      notes: notes.trim(),
-      status: "not-contacted",
-      createdAt: nowIso(),
-    };
-    data.prospects.push(prospect);
-    return prospect;
-  },
+export function renameSprint(data: ProspectingData, id: string, name: string): ProspectingData {
+  const value = name.trim();
+  if (!value) return data;
+  return { ...data, sprints: data.sprints.map((s) => (s.id === id ? { ...s, name: value } : s)) };
+}
 
-  updateProspect(data: ProspectingData, id: string, patch: Partial<Omit<Prospect, "id" | "sprintId" | "createdAt">>): void {
-    const p = data.prospects.find((x) => x.id === id);
-    if (p) Object.assign(p, patch);
-  },
+export function setSprintDescription(data: ProspectingData, id: string, description: string): ProspectingData {
+  return { ...data, sprints: data.sprints.map((s) => (s.id === id ? { ...s, description } : s)) };
+}
 
-  deleteProspect(data: ProspectingData, id: string): void {
-    data.prospects = data.prospects.filter((p) => p.id !== id);
-  },
-};
+export function deleteSprint(data: ProspectingData, id: string): ProspectingData {
+  return {
+    sprints: data.sprints.filter((s) => s.id !== id),
+    prospects: data.prospects.filter((p) => p.sprintId !== id),
+  };
+}
+
+export function createProspect(
+  data: ProspectingData,
+  sprintId: string,
+  companyName: string,
+  website = "",
+  notes = "",
+): ProspectingData {
+  const prospect: Prospect = {
+    id: genId(),
+    sprintId,
+    companyName: companyName.trim(),
+    website: website.trim(),
+    notes: notes.trim(),
+    status: "not-contacted",
+    createdAt: nowIso(),
+  };
+  return { ...data, prospects: [...data.prospects, prospect] };
+}
+
+export function updateProspect(
+  data: ProspectingData,
+  id: string,
+  patch: Partial<Pick<Prospect, "companyName" | "website" | "notes" | "status">>,
+): ProspectingData {
+  return { ...data, prospects: data.prospects.map((p) => (p.id === id ? { ...p, ...patch } : p)) };
+}
+
+export function deleteProspect(data: ProspectingData, id: string): ProspectingData {
+  return { ...data, prospects: data.prospects.filter((p) => p.id !== id) };
+}

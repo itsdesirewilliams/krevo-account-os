@@ -36,14 +36,19 @@ export interface OverviewSheet {
   projects: Project[];
 }
 
-export interface Block {
+export interface NotesBlock {
   id: string;
-  type: "notes" | "todo";
-  /** notes blocks */
-  text?: string;
-  /** todo blocks */
-  tasks?: Task[];
+  type: "notes";
+  text: string;
 }
+
+export interface TodoBlock {
+  id: string;
+  type: "todo";
+  tasks: Task[];
+}
+
+export type Block = NotesBlock | TodoBlock;
 
 export interface CustomSheet {
   id: string;
@@ -56,6 +61,8 @@ export type Sheet = OverviewSheet | CustomSheet;
 /** Internal account color classification (purely organizational). */
 export type AccountColor = "none" | "green" | "yellow" | "red";
 export const ACCOUNT_COLORS: AccountColor[] = ["none", "green", "yellow", "red"];
+/** Sidebar filter: any color, or all accounts. */
+export type AccountColorFilter = "all" | AccountColor;
 
 export interface Account {
   id: string;
@@ -90,10 +97,12 @@ export interface AppState {
 export const isOverview = (sheet: Sheet): sheet is OverviewSheet =>
   Object.prototype.hasOwnProperty.call(sheet, "projects");
 
+/**
+ * The Overview sheet of an account, or null when none exists.
+ * `normalizeAccount` guarantees every account has one, so this only returns
+ * null for a transiently empty/unknown account.
+ */
 export const overviewOf = (account: Account | null | undefined): OverviewSheet | null => {
   if (!account) return null;
-  return (
-    (account.sheets.find((s) => isOverview(s)) as OverviewSheet | undefined) ??
-    (account.sheets.length ? (account.sheets[0] as OverviewSheet) : null)
-  );
+  return account.sheets.find(isOverview) ?? null;
 };

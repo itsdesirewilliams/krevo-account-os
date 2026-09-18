@@ -1,8 +1,9 @@
 /*
- * Application store: single React context holding the app state plus all
- * domain actions. Every mutation goes through `update`, which clones state,
- * applies the mutation, re-normalizes, and schedules a debounced persist via
- * the storage driver. Components never touch persistence directly.
+ * Application store: React contexts holding the app state and the domain
+ * actions separately, so state changes only re-render components that read
+ * state. Every mutation goes through `update`, which clones state, applies the
+ * mutation, re-normalizes, and schedules a debounced persist via the storage
+ * driver. Components never touch persistence directly.
  */
 import {
   createContext,
@@ -17,13 +18,13 @@ import {
 import { genId } from "../lib/id";
 import { isOverview, overviewOf } from "../types";
 import type { Account, AccountColor, AppState, Block, Project, Sheet, Task } from "../types";
-import { defaultState, normalize } from "./normalize";
+import { normalize } from "./normalize";
+import { useFlushOnExit } from "./persist";
 import { STORAGE_KEY, storage } from "../storage";
 
 const makeTask = (text: string): Task => ({ id: genId(), text, completed: false });
 
-export interface Store {
-  state: AppState;
+export interface StoreActions {
   createAccount: (name: string) => void;
   openAccount: (id: string) => void;
   closeTab: (id: string) => void;
@@ -65,10 +66,18 @@ export interface Store {
   emptyTrash: () => void;
 }
 
-const StoreContext = createContext<Store | null>(null);
+const StoreStateContext = createContext<AppState | null>(null);
+const StoreActionsContext = createContext<StoreActions | null>(null);
 export function StoreProvider({ initialState, children }: { initialState: AppState; children: ReactNode }) {
   const [state, setState] = useState<AppState>(initialState);
   const timer = useRef<number | undefined>(undefined);
+
+  // Flush pending edits synchronously when the page is hidden or closed.
+  const latest = useRef(state);
+  useEffect(() => {
+    latest.current = state;
+  }, [state]);
+  useFlushOnExit(STORAGE_KEY, latest);
 
   // Debounced autosave through the storage driver.
   useEffect(() => {
@@ -87,7 +96,7 @@ export function StoreProvider({ initialState, children }: { initialState: AppSta
     });
   }, []);
 
-  const store = useMemo<Store>(() => {
+  const actions = useMemo<StoreActions>(() => {
     const withAccount = (s: AppState, accountId: string): Account | undefined =>
       s.accounts.find((a) => a.id === accountId);
 
@@ -97,8 +106,6 @@ export function StoreProvider({ initialState, children }: { initialState: AppSta
     };
 
     return {
-      state,
-
       // ---- Accounts ----
       createAccount(name) {
         const overview = { id: genId(), name: "Overview", projects: [] };
@@ -156,6 +163,7 @@ export function StoreProvider({ initialState, children }: { initialState: AppSta
           const idx = s.accounts.findIndex((a) => a.id === id);
           if (idx < 0) return;
           const account = s.accounts.splice(idx, 1)[0];
+          if (!account) return;
           s.openTabs = s.openTabs.filter((t) => t !== id);
           if (s.activeAccountId === id) {
             s.activeAccountId = s.openTabs[s.openTabs.length - 1] || null;
@@ -195,13 +203,14 @@ export function StoreProvider({ initialState, children }: { initialState: AppSta
           const idx = a.sheets.findIndex((x) => x.id === sheetId);
           if (idx < 0) return;
           const sheet = a.sheets[idx];
+          if (!sheet) return;
           if (a.sheets.length <= 1) return; // never remove the last sheet
           if (isOverview(sheet)) return; // Overview (projects) cannot be deleted
           a.sheets.splice(idx, 1);
           if (s.activeSheetByAccount[accountId] === sheetId) {
-            s.activeSheetByAccount[accountId] = a.sheets[0].id;
+            s.activeSheetByAccount[accountId] = a.sheets[0]?.id ?? null;
           }
-          s.trash.sheets.push({ id: genId(), accountId, accountName: a.name, sheet: sheet as never });
+          s.trash.sheets.push({ id: genId(), accountId, accountName: a.name, sheet });
         });
       },
 
@@ -239,14 +248,14 @@ export function StoreProvider({ initialState, children }: { initialState: AppSta
           const sheet = withSheet(s, accountId, sheetId);
           if (!sheet || isOverview(sheet)) return;
           const b = sheet.blocks.find((x) => x.id === blockId);
-          if (b && b.type === "todo") b.tasks!.push(makeTask(value));
+          if (b && b.type === "todo") b.tasks.push(makeTask(value));
         });
       },
       toggleBlockTask(accountId, sheetId, blockId, taskId) {
         update((s) => {
           const sheet = withSheet(s, accountId, sheetId);
           const b = sheet && !isOverview(sheet) ? sheet.blocks.find((x) => x.id === blockId) : undefined;
-          const t = b && b.type === "todo" ? b.tasks!.find((x) => x.id === taskId) : undefined;
+          const t = b && b.type === "todo" ? b.tasks.find((x) => x.id === taskId) : undefined;
           if (t) t.completed = !t.completed;
         });
       },
@@ -255,7 +264,7 @@ export function StoreProvider({ initialState, children }: { initialState: AppSta
           const sheet = withSheet(s, accountId, sheetId);
           if (!sheet || isOverview(sheet)) return;
           const b = sheet.blocks.find((x) => x.id === blockId);
-          if (b && b.type === "todo") b.tasks = b.tasks!.filter((t) => t.id !== taskId);
+          if (b && b.type === "todo") b.tasks = b.tasks.filter((t) => t.id !== taskId);
         });
       },
       setBlockTaskText(accountId, sheetId, blockId, taskId, text) {
@@ -263,7 +272,7 @@ export function StoreProvider({ initialState, children }: { initialState: AppSta
           const sheet = withSheet(s, accountId, sheetId);
           if (!sheet || isOverview(sheet)) return;
           const b = sheet.blocks.find((x) => x.id === blockId);
-          const t = b && b.type === "todo" ? b.tasks!.find((x) => x.id === taskId) : undefined;
+          const t = b && b.type === "todo" ? b.tasks.find((x) => x.id === taskId) : undefined;
           if (t) t.text = text;
         });
       },
@@ -289,7 +298,11 @@ export function StoreProvider({ initialState, children }: { initialState: AppSta
           const a = withAccount(s, accountId);
           const overview = a ? overviewOf(a) : null;
           const p = overview ? overview.projects.find((x) => x.id === projectId) : undefined;
-          if (p) (p as unknown as Record<string, string>)[field] = value;
+          if (!p) return;
+          if (field === "projectName") p.projectName = value;
+          else if (field === "eventName") p.eventName = value;
+          else if (field === "charges") p.charges = value;
+          else p.eventDate = value;
         });
       },
       setProjectPlan(accountId, projectId, planId) {
@@ -368,7 +381,7 @@ export function StoreProvider({ initialState, children }: { initialState: AppSta
       hideTrash() {
         update((s) => {
           s.showTrash = false;
-          if (s.openTabs.length) s.activeAccountId = s.openTabs[s.openTabs.length - 1];
+          if (s.openTabs.length) s.activeAccountId = s.openTabs[s.openTabs.length - 1] ?? null;
         });
       },
       restoreAccount(id) {
@@ -376,9 +389,10 @@ export function StoreProvider({ initialState, children }: { initialState: AppSta
           const idx = s.trash.accounts.findIndex((a) => a.id === id);
           if (idx < 0) return;
           const account = s.trash.accounts.splice(idx, 1)[0];
+          if (!account) return;
           s.accounts.push(account);
           if (!s.activeSheetByAccount[account.id]) {
-            s.activeSheetByAccount[account.id] = account.sheets.length ? account.sheets[0].id : null;
+            s.activeSheetByAccount[account.id] = account.sheets[0]?.id ?? null;
           }
           if (!s.openTabs.includes(account.id)) s.openTabs.push(account.id);
           s.activeAccountId = account.id;
@@ -394,13 +408,14 @@ export function StoreProvider({ initialState, children }: { initialState: AppSta
         update((s) => {
           const idx = s.trash.sheets.findIndex((e) => e.id === entryId);
           if (idx < 0) return;
-          const entry = s.trash.sheets.splice(idx, 1)[0];
+          const entry = s.trash.sheets[idx];
+          if (!entry) return;
           const account = s.accounts.find((a) => a.id === entry.accountId);
-          if (account) {
-            account.sheets.push(entry.sheet);
-            if (!s.activeSheetByAccount[account.id]) {
-              s.activeSheetByAccount[account.id] = entry.sheet.id;
-            }
+          if (!account) return; // leave it in Trash - there is nothing to restore into
+          s.trash.sheets.splice(idx, 1);
+          account.sheets.push(entry.sheet);
+          if (!s.activeSheetByAccount[account.id]) {
+            s.activeSheetByAccount[account.id] = entry.sheet.id;
           }
         });
       },
@@ -415,18 +430,28 @@ export function StoreProvider({ initialState, children }: { initialState: AppSta
         });
       },
     };
-  }, [state, update]);
+  }, [update]);
 
-  return <StoreContext.Provider value={store}>{children}</StoreContext.Provider>;
+  return (
+    <StoreStateContext.Provider value={state}>
+      <StoreActionsContext.Provider value={actions}>{children}</StoreActionsContext.Provider>
+    </StoreStateContext.Provider>
+  );
 }
 
-export function useStore(): Store {
-  const ctx = useContext(StoreContext);
-  if (!ctx) throw new Error("useStore must be used inside StoreProvider");
+/** Read the accounts app state. */
+export function useStoreState(): AppState {
+  const ctx = useContext(StoreStateContext);
+  if (!ctx) throw new Error("useStoreState must be used inside StoreProvider");
   return ctx;
 }
 
-export { defaultState };
+/** Read the accounts actions (stable identity across state changes). */
+export function useStoreActions(): StoreActions {
+  const ctx = useContext(StoreActionsContext);
+  if (!ctx) throw new Error("useStoreActions must be used inside StoreProvider");
+  return ctx;
+}
 
 
 

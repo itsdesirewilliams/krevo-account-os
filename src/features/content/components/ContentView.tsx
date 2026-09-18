@@ -1,18 +1,17 @@
 import { useState } from "react";
-import { useContent, POST_TYPES, POST_TYPE_LABELS } from "../contentState";
+import { useContent } from "../contentState";
+import { POST_TYPES, POST_TYPE_LABELS } from "../content.types";
 import type { ContentPost, PostType } from "../content.types";
-import { useStore } from "../../../state/store";
+import { useStoreState } from "../../../state/store";
 import { useUI } from "../../../state/ui";
 import { useNav } from "../../../state/nav";
 import { isOverview } from "../../../types";
-import { SimpleModal } from "../../../components/ui/SimpleModal";
-import { formatDate } from "../../../lib/dates";
-
-const todayIso = () => new Date().toISOString().slice(0, 10);
+import { Modal } from "../../../components/modals/Modal";
+import { formatDate, todayLocalIso } from "../../../lib/dates";
 
 /** Projects + accounts across the app, for the optional post link. */
 function useProjectOptions() {
-  const { state } = useStore();
+  const state = useStoreState();
   const projects: { accountId: string; accountName: string; projectId: string; projectName: string }[] = [];
   for (const a of state.accounts) {
     for (const s of a.sheets) {
@@ -185,7 +184,7 @@ function SocialAccountDetail({
         <input
           className="input w-full"
           defaultValue={acc.handle}
-          onChange={(e) => content.updateSocialAccount(acc.id, { handle: e.target.value })}
+          onBlur={(e) => content.updateSocialAccount(acc.id, { handle: e.target.value })}
         />
       </div>
 
@@ -196,7 +195,7 @@ function SocialAccountDetail({
           rows={2}
           placeholder="Add a description..."
           defaultValue={acc.description}
-          onChange={(e) => content.updateSocialAccount(acc.id, { description: e.target.value })}
+          onBlur={(e) => content.updateSocialAccount(acc.id, { description: e.target.value })}
         />
       </div>
 
@@ -225,17 +224,17 @@ function SocialAccountDetail({
         </div>
       )}
       {adding && (
-        <SimpleModal title="New Post" onClose={() => setAdding(false)}>
+        <Modal title="New Post" onClose={() => setAdding(false)}>
           <PostForm
-            initial={{ title: "", date: todayIso(), type: "post", accountId: null, projectId: null }}
+            initial={{ title: "", date: todayLocalIso(), type: "post", accountId: null, projectId: null }}
             submitLabel="Add Post"
             onSubmit={submitNew}
             onClose={() => setAdding(false)}
           />
-        </SimpleModal>
+        </Modal>
       )}
       {editing && (
-        <SimpleModal title="Edit Post" onClose={() => setEditing(null)}>
+        <Modal title="Edit Post" onClose={() => setEditing(null)}>
           <PostForm
             initial={{
               title: editing.title,
@@ -252,7 +251,7 @@ function SocialAccountDetail({
               setEditing(null);
             }}
           />
-        </SimpleModal>
+        </Modal>
       )}
 
       <div className="mt-8">
@@ -283,7 +282,7 @@ export function ContentView() {
           <button className="btn btn-primary" onClick={() => setAdding(true)}>+ New Social Account</button>
         </div>
         {adding && (
-          <SimpleModal title="New Social Account" onClose={() => setAdding(false)}>
+          <Modal title="New Social Account" onClose={() => setAdding(false)}>
             <div className="field-form">
               <div className="modal-label">Platform</div>
               <input className="input w-full" autoFocus value={platform} onChange={(e) => setPlatform(e.target.value)} placeholder="e.g. Instagram" />
@@ -312,7 +311,7 @@ export function ContentView() {
                 Create
               </button>
             </div>
-          </SimpleModal>
+          </Modal>
         )}
       </>
     );
@@ -320,6 +319,7 @@ export function ContentView() {
 
   return (
     <SocialAccountDetail
+      key={account.id}
       content={content}
       acc={account}
       posts={posts}

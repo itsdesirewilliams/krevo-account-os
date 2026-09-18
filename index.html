@@ -3,13 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Krevo Account OS</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Mona+Sans:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
+    <!--
+      Remote origins are blocked; fonts and assets are bundled locally.
+      'unsafe-inline' for script/style is required by the Vite dev server and is
+      dropped by the stricter desktop CSP in Phase 4 (tauri.conf.json).
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws: wss:"
     />
+    <title>Krevo Account OS</title>
   </head>
   <body>
     <div id="root"></div>

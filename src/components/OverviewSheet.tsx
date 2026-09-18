@@ -1,11 +1,12 @@
 import { useUI } from "../state/ui";
-import type { Account } from "../types";
-import { formatDate, formatCharges } from "../lib/dates";
+import { overviewOf, type Account } from "../types";
+import { formatDate } from "../lib/dates";
+import { formatCharges } from "../lib/currency";
 
 export function OverviewSheet({ account }: { account: Account }) {
   const ui = useUI();
-  const overview = account.sheets.find((s) => "projects" in s) ?? account.sheets[0];
-  if (!overview || !("projects" in overview)) return null;
+  const overview = overviewOf(account);
+  if (!overview) return null;
 
   return (
     <div className="p-6 max-w-3xl">

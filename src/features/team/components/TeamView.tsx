@@ -8,9 +8,10 @@ import type { Job, MemberType, TeamMember } from "../team.types";
 import { MEMBER_TYPES } from "../team.types";
 import { useNav } from "../../../state/nav";
 import { useUI } from "../../../state/ui";
-import { formatINR } from "../../../lib/currency";
-import { FeatureEmpty, SimpleModal } from "../../../components/ui/SimpleModal";
-import { CheckIcon, CloseIcon } from "../../../components/Icons";
+import { formatINR, parseAmount } from "../../../lib/currency";
+import { FeatureEmpty } from "../../../components/ui/FeatureEmpty";
+import { Modal } from "../../../components/modals/Modal";
+import { TaskInput, TaskRow } from "../../../components/ui/TaskRow";
 
 /* ---------------- Member overview ---------------- */
 
@@ -111,35 +112,28 @@ function MemberOverview({ member }: { member: TeamMember }) {
         />
       )}
 
-      {jobModal && (
-        <JobModal
-          key={jobModal.id}
-          member={member}
-          jobId={jobModal.id}
-          onClose={() => setJobModal(null)}
-        />
-      )}
+      {jobModal && <JobModal key={jobModal.id} member={member} jobId={jobModal.id} onClose={() => setJobModal(null)} />}
     </div>
   );
 }
+
 /* ---------------- Modals ---------------- */
 
 function AddMemberModal() {
-  const { memberFormOpen, closeMemberForm, createMember } = useTeam();
+  const { closeMemberForm, createMember } = useTeam();
   const [type, setType] = useState<MemberType>("person");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [cost, setCost] = useState("");
-  if (!memberFormOpen) return null;
 
   const submit = () => {
     if (!name.trim()) return;
-    createMember({ type, name, description, monthlyCost: Number.parseFloat(cost) || 0 });
+    createMember({ type, name, description, monthlyCost: parseAmount(cost) });
     closeMemberForm();
   };
 
   return (
-    <SimpleModal title="Add Team Member" onClose={closeMemberForm}>
+    <Modal title="Add Team Member" onClose={closeMemberForm}>
       <div className="field-form">
         <div className="modal-label">Type</div>
         <div className="flex gap-2">
@@ -167,7 +161,7 @@ function AddMemberModal() {
         <button className="btn btn-ghost" onClick={closeMemberForm}>Cancel</button>
         <button className="btn btn-primary" disabled={!name.trim()} onClick={submit}>Create</button>
       </div>
-    </SimpleModal>
+    </Modal>
   );
 }
 
@@ -181,7 +175,7 @@ function AddJobModal({ onClose, onCreate }: {
   const [active, setActive] = useState(true);
 
   return (
-    <SimpleModal title="Add Job" onClose={onClose}>
+    <Modal title="Add Job" onClose={onClose}>
       <div className="field-form">
         <div className="modal-label">Job Name</div>
         <input className="input w-full" autoFocus value={name} onChange={(e) => setName(e.target.value)} />
@@ -208,7 +202,7 @@ function AddJobModal({ onClose, onCreate }: {
           Create
         </button>
       </div>
-    </SimpleModal>
+    </Modal>
   );
 }
 
@@ -224,7 +218,7 @@ function EditMemberModal({ member, onClose, onSave, onRemove }: {
   const [type, setType] = useState<MemberType>(member.type);
 
   return (
-    <SimpleModal title="Edit Team Member" onClose={onClose}>
+    <Modal title="Edit Team Member" onClose={onClose}>
       <div className="field-form">
         <div className="modal-label">Type</div>
         <div className="flex gap-2">
@@ -254,15 +248,16 @@ function EditMemberModal({ member, onClose, onSave, onRemove }: {
           <button
             className="btn btn-primary"
             disabled={!name.trim()}
-            onClick={() => onSave({ name, description, type, monthlyCost: Number.parseFloat(cost) || 0 })}
+            onClick={() => onSave({ name, description, type, monthlyCost: parseAmount(cost) })}
           >
             Save
           </button>
         </div>
       </div>
-    </SimpleModal>
+    </Modal>
   );
 }
+
 /* ---------------- Job modal (full job view) ---------------- */
 
 function JobModal({ member, jobId, onClose }: { member: TeamMember; jobId: string; onClose: () => void }) {
@@ -272,13 +267,13 @@ function JobModal({ member, jobId, onClose }: { member: TeamMember; jobId: strin
   if (!job) return null;
 
   return (
-    <SimpleModal title={job.name || "Job"} width={480} onClose={onClose}>
+    <Modal title={job.name || "Job"} width={480} onClose={onClose}>
       <div className="field-form">
         <div className="modal-label">Job Name</div>
         <input
           className="input w-full"
           defaultValue={job.name}
-          onChange={(e) => editJob(member.id, jobId, { name: e.target.value })}
+          onBlur={(e) => editJob(member.id, jobId, { name: e.target.value })}
         />
       </div>
       <div className="field-form">
@@ -287,7 +282,7 @@ function JobModal({ member, jobId, onClose }: { member: TeamMember; jobId: strin
           className="notes-area"
           rows={2}
           defaultValue={job.description}
-          onChange={(e) => editJob(member.id, jobId, { description: e.target.value })}
+          onBlur={(e) => editJob(member.id, jobId, { description: e.target.value })}
         />
       </div>
       <div className="field-form">
@@ -295,7 +290,7 @@ function JobModal({ member, jobId, onClose }: { member: TeamMember; jobId: strin
         <input
           className="input w-full"
           defaultValue={job.category}
-          onChange={(e) => editJob(member.id, jobId, { category: e.target.value })}
+          onBlur={(e) => editJob(member.id, jobId, { category: e.target.value })}
         />
       </div>
       <div className="field-form flex items-center gap-2">
@@ -318,9 +313,7 @@ function JobModal({ member, jobId, onClose }: { member: TeamMember; jobId: strin
             </button>
           </div>
         ) : (
-          <div className="text-[13px] text-dim">
-            No SOP attached. SOP file storage is wired through the persistence layer.
-          </div>
+          <div className="text-[13px] text-dim">No SOP attached yet.</div>
         )}
       </div>
 
@@ -329,39 +322,17 @@ function JobModal({ member, jobId, onClose }: { member: TeamMember; jobId: strin
       <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-dim mb-2">To-Do</div>
       <div className="flex flex-col">
         {job.tasks.map((t) => (
-          <div key={t.id} className="flex items-center gap-2.5 py-1 group">
-            <button className={"check" + (t.completed ? " on" : "")} onClick={() => toggleTask(member.id, jobId, t.id)}>
-              <CheckIcon />
-            </button>
-            <input
-              className={
-                "flex-1 bg-transparent border-0 outline-none text-[13.5px] min-w-0 " +
-                (t.completed ? "line-through text-dim" : "text-text")
-              }
-              defaultValue={t.text}
-              onChange={(e) => editTaskText(member.id, jobId, t.id, e.target.value)}
-            />
-            <button
-              className="icon-btn opacity-0 group-hover:opacity-100"
-              title="Delete task"
-              onClick={() => removeTask(member.id, jobId, t.id)}
-            >
-              <CloseIcon size={11} />
-            </button>
-          </div>
+          <TaskRow
+            key={t.id}
+            text={t.text}
+            completed={t.completed}
+            onToggle={() => toggleTask(member.id, jobId, t.id)}
+            onCommitText={(v) => editTaskText(member.id, jobId, t.id, v)}
+            onDelete={() => removeTask(member.id, jobId, t.id)}
+          />
         ))}
       </div>
-      <input
-        className="task-input"
-        placeholder="+ Add Task"
-        onKeyDown={(e) => {
-          const el = e.currentTarget;
-          if (e.key === "Enter" && el.value.trim()) {
-            createTask(member.id, jobId, el.value);
-            el.value = "";
-          }
-        }}
-      />
+      <TaskInput onAdd={(text) => createTask(member.id, jobId, text)} />
 
       <div className="flex justify-between items-center mt-5">
         <button
@@ -377,19 +348,22 @@ function JobModal({ member, jobId, onClose }: { member: TeamMember; jobId: strin
         </button>
         <button className="btn btn-ghost" onClick={onClose}>Close</button>
       </div>
-    </SimpleModal>
+    </Modal>
   );
 }
+
 /* ---------------- Section root ---------------- */
 
 export function TeamView() {
-  const { members, memberById } = useTeam();
+  const { members, memberById, memberFormOpen } = useTeam();
   const { nav, selectMember } = useNav();
   const member = memberById(nav.teamMemberId);
 
   return (
     <>
-      {member ? <MemberOverview member={member} /> : (
+      {member ? (
+        <MemberOverview key={member.id} member={member} />
+      ) : (
         <div className="p-6 max-w-3xl">
           <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-dim mb-1">Team</div>
           <FeatureEmpty
@@ -406,10 +380,7 @@ export function TeamView() {
           />
         </div>
       )}
-      <AddMemberModal />
+      {memberFormOpen && <AddMemberModal />}
     </>
   );
 }
-
-
-

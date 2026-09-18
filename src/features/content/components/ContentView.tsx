@@ -2,17 +2,31 @@ import { useState } from "react";
 import { useContent } from "../contentState";
 import { POST_TYPES, POST_TYPE_LABELS } from "../content.types";
 import type { ContentPost, PostType } from "../content.types";
-import { useStoreState } from "../../../state/store";
+import { useStoreActions, useStoreState } from "../../../state/store";
 import { useUI } from "../../../state/ui";
 import { useNav } from "../../../state/nav";
 import { isOverview } from "../../../types";
 import { Modal } from "../../../components/modals/Modal";
+import { ContentCalendar } from "./ContentCalendar";
 import { formatDate, todayLocalIso } from "../../../lib/dates";
+import type { DeliverableId } from "../../plans/plans.types";
+
+const DELIVERABLE_FOR_TYPE: Partial<Record<PostType, DeliverableId>> = {
+  collab: "collab-repost",
+  repost: "collab-repost",
+  flyer: "promo-flyer",
+};
 
 /** Projects + accounts across the app, for the optional post link. */
 function useProjectOptions() {
   const state = useStoreState();
-  const projects: { accountId: string; accountName: string; projectId: string; projectName: string }[] = [];
+  const projects: {
+    accountId: string;
+    accountName: string;
+    projectId: string;
+    projectName: string;
+    deliverables: { "collab-repost"?: boolean; "promo-flyer"?: boolean } | null;
+  }[] = [];
   for (const a of state.accounts) {
     for (const s of a.sheets) {
       if (isOverview(s)) {
@@ -22,6 +36,7 @@ function useProjectOptions() {
             accountName: a.name,
             projectId: p.id,
             projectName: p.projectName || p.eventName || "Untitled",
+            deliverables: p.deliverables ?? null,
           });
         }
       }
@@ -32,7 +47,8 @@ function useProjectOptions() {
     id ? (state.accounts.find((a) => a.id === id)?.name ?? "") : "";
   const projectNameOf = (id: string | null): string =>
     id ? (projects.find((p) => p.projectId === id)?.projectName ?? "") : "";
-  return { projects, accounts, accountNameOf, projectNameOf };
+  const projectById = (id: string | null) => (id ? projects.find((p) => p.projectId === id) : undefined);
+  return { projects, accounts, accountNameOf, projectNameOf, projectById };
 }
 
 function PostForm({
@@ -153,6 +169,9 @@ function SocialAccountDetail({
 }) {
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<ContentPost | null>(null);
+  const [view, setView] = useState<"list" | "calendar">("list");
+  const { projectById } = useProjectOptions();
+  const { toggleProjectDeliverable } = useStoreActions();
 
   const submitNew = (v: { title: string; date: string; type: PostType; accountId: string | null; projectId: string | null }) => {
     content.createPost({ socialAccountId: acc.id, ...v });
@@ -201,26 +220,63 @@ function SocialAccountDetail({
 
       <div className="flex items-center justify-between mt-6 mb-2">
         <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-dim">Posts ({posts.length})</div>
-        <button className="btn btn-ghost" onClick={() => setAdding(true)}>+ Add Post</button>
+        <div className="flex items-center gap-1.5">
+          <button
+            className={"btn btn-ghost !py-0.5 !px-2 " + (view === "list" ? "!text-[color:var(--accent)]" : "")}
+            onClick={() => setView("list")}
+          >
+            List
+          </button>
+          <button
+            className={"btn btn-ghost !py-0.5 !px-2 " + (view === "calendar" ? "!text-[color:var(--accent)]" : "")}
+            onClick={() => setView("calendar")}
+          >
+            Calendar
+          </button>
+          <button className="btn btn-ghost" onClick={() => setAdding(true)}>+ Add Post</button>
+        </div>
       </div>
 
-      {posts.length === 0 ? (
+      {view === "calendar" ? (
+        <ContentCalendar posts={posts} />
+      ) : posts.length === 0 ? (
         <div className="text-[13px] text-dim py-6">No posts yet. Content is about volume, not analytics.</div>
       ) : (
         <div className="flex flex-col gap-2">
-          {posts.map((p) => (
-            <div key={p.id} className="project-card" onClick={() => setEditing(p)}>
-              <div className="flex items-center justify-between gap-3">
-                <div className="project-card-title">{p.title}</div>
-                <span className="badge">{POST_TYPE_LABELS[p.type]}</span>
+          {posts.map((p) => {
+            const mapped = DELIVERABLE_FOR_TYPE[p.type];
+            const project = projectById(p.projectId);
+            const fulfills =
+              mapped && project?.accountId
+                ? project.deliverables?.[mapped] === false
+                  ? { accountId: project.accountId, deliverableId: mapped }
+                  : null
+                : null;
+            return (
+              <div key={p.id} className="project-card" onClick={() => setEditing(p)}>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="project-card-title">{p.title}</div>
+                  <span className="badge">{POST_TYPE_LABELS[p.type]}</span>
+                </div>
+                <div className="project-card-meta">
+                  {formatDate(p.date)}
+                  {p.accountId ? `  ·  ${accountNameOf(p.accountId)}` : ""}
+                  {p.projectId ? `  ·  ${projectNameOf(p.projectId)}` : ""}
+                </div>
+                {fulfills && p.projectId && (
+                  <button
+                    className="btn btn-ghost mt-2 !py-0.5 !px-2 !text-[11.5px]"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleProjectDeliverable(fulfills.accountId, p.projectId ?? "", fulfills.deliverableId);
+                    }}
+                  >
+                    Mark plan deliverable done
+                  </button>
+                )}
               </div>
-              <div className="project-card-meta">
-                {formatDate(p.date)}
-                {p.accountId ? `  ·  ${accountNameOf(p.accountId)}` : ""}
-                {p.projectId ? `  ·  ${projectNameOf(p.projectId)}` : ""}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
       {adding && (

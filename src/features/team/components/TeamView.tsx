@@ -2,18 +2,23 @@
  * TEAM module view: member workspace with job cards (summary only),
  * plus modals for member/job creation and the full job view.
  */
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useTeam } from "../teamState";
 import type { Job, MemberType, TeamMember } from "../team.types";
 import { MEMBER_TYPES } from "../team.types";
 import { useNav } from "../../../state/nav";
 import { useUI } from "../../../state/ui";
 import { formatINR, parseAmount } from "../../../lib/currency";
+import { nowIso } from "../../../lib/dates";
+import { genId } from "../../../lib/id";
+import { storage } from "../../../storage";
 import { FeatureEmpty } from "../../../components/ui/FeatureEmpty";
 import { Modal } from "../../../components/modals/Modal";
 import { TaskInput, TaskRow } from "../../../components/ui/TaskRow";
 import { useTasks } from "../../tasks/tasksState";
 import { sortedTasks, tasksByJob } from "../../tasks/tasks.repository";
+import { MemberWeeklyPanel } from "./MemberWeeklyPanel";
+import { TeamWeeklyBoard } from "./TeamWeeklyBoard";
 
 /* ---------------- Member overview ---------------- */
 
@@ -115,6 +120,8 @@ function MemberOverview({ member }: { member: TeamMember }) {
       )}
 
       {jobModal && <JobModal key={jobModal.id} member={member} jobId={jobModal.id} onClose={() => setJobModal(null)} />}
+
+      <MemberWeeklyPanel member={member} />
     </div>
   );
 }
@@ -266,10 +273,49 @@ function JobModal({ member, jobId, onClose }: { member: TeamMember; jobId: strin
   const { editJob, removeJob, attachSop } = useTeam();
   const tasks = useTasks();
   const ui = useUI();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [sopBusy, setSopBusy] = useState(false);
   const job = member.jobs.find((j) => j.id === jobId);
   if (!job) return null;
 
   const list = sortedTasks(tasksByJob(tasks.tasks, jobId));
+
+  const attachFile = async (file: File) => {
+    setSopBusy(true);
+    try {
+      const fileKey = `sop_${jobId}_${genId()}`;
+      await storage.saveBlob(fileKey, file);
+      attachSop(member.id, jobId, {
+        id: genId(),
+        jobId,
+        fileName: file.name,
+        mimeType: file.type || "application/octet-stream",
+        size: file.size,
+        fileKey,
+        createdAt: nowIso(),
+      });
+    } finally {
+      setSopBusy(false);
+    }
+  };
+
+  const downloadSop = async () => {
+    if (!job.sop) return;
+    const blob = await storage.loadBlob(job.sop.fileKey);
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = job.sop.fileName;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const detachSop = async () => {
+    if (!job.sop) return;
+    await storage.removeBlob(job.sop.fileKey);
+    attachSop(member.id, jobId, null);
+  };
 
   return (
     <Modal title={job.name || "Job"} width={480} onClose={onClose}>
@@ -313,12 +359,26 @@ function JobModal({ member, jobId, onClose }: { member: TeamMember; jobId: strin
         {job.sop ? (
           <div className="flex items-center gap-2 text-[13px]">
             <span className="flex-1 truncate">{job.sop.fileName}</span>
-            <button className="btn btn-ghost" onClick={() => attachSop(member.id, jobId, null)}>
-              Detach
-            </button>
+            <button className="btn btn-ghost" onClick={() => void downloadSop()}>Download</button>
+            <button className="btn btn-danger-ghost" onClick={() => void detachSop()}>Detach</button>
           </div>
         ) : (
-          <div className="text-[13px] text-dim">No SOP attached yet.</div>
+          <div className="flex items-center gap-2">
+            <input
+              ref={fileRef}
+              type="file"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) void attachFile(file);
+                e.target.value = "";
+              }}
+            />
+            <button className="btn btn-ghost" disabled={sopBusy} onClick={() => fileRef.current?.click()}>
+              {sopBusy ? "Saving…" : "Attach file"}
+            </button>
+            <span className="text-[13px] text-dim">No SOP attached yet.</span>
+          </div>
         )}
       </div>
 
@@ -366,10 +426,22 @@ export function TeamView() {
   const { members, memberById, memberFormOpen } = useTeam();
   const { nav, selectMember } = useNav();
   const member = memberById(nav.teamMemberId);
+  const [tab, setTab] = useState<"roster" | "board">("roster");
 
   return (
     <>
-      {member ? (
+      <div className="flex items-center gap-2 px-6 pt-4">
+        <button className={"btn " + (tab === "roster" ? "btn-primary" : "btn-ghost")} onClick={() => setTab("roster")}>
+          Roster
+        </button>
+        <button className={"btn " + (tab === "board" ? "btn-primary" : "btn-ghost")} onClick={() => setTab("board")}>
+          Weekly board
+        </button>
+      </div>
+
+      {tab === "board" ? (
+        <TeamWeeklyBoard />
+      ) : member ? (
         <MemberOverview key={member.id} member={member} />
       ) : (
         <div className="p-6 max-w-3xl">

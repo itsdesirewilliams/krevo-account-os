@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTasks } from "../tasksState";
 import { useTeam } from "../../team/teamState";
-import { useTaskContextLabel } from "../taskContext";
+import { useTaskContextLabel, useTaskContextNav } from "../taskContext";
 import { sortedTasks } from "../tasks.repository";
 import { TASK_STATUSES, TASK_STATUS_LABELS, type TaskRecord, type TaskStatus } from "../tasks.types";
 import { CheckIcon, CloseIcon } from "../../../components/Icons";
@@ -13,6 +13,7 @@ function TaskItem({ task }: { task: TaskRecord }) {
   const tasks = useTasks();
   const { data: team } = useTeam();
   const contextLabel = useTaskContextLabel();
+  const contextNav = useTaskContextNav();
   const context = contextLabel(task.links);
 
   return (
@@ -35,6 +36,11 @@ function TaskItem({ task }: { task: TaskRecord }) {
         }}
       />
       {context && <span className="text-dim text-[11.5px] truncate max-w-[200px]">{context}</span>}
+      {contextNav.canOpen(task.links) && (
+        <button className="btn btn-ghost !py-0.5 !px-2 !text-[11.5px]" title="Open linked item" onClick={() => contextNav.open(task.links)}>
+          Open
+        </button>
+      )}
       <select
         className="input !py-0.5 !px-1.5 !text-[12px]"
         value={task.priority}

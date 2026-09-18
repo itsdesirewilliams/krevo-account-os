@@ -8,6 +8,7 @@
  * Every failure is reported through `onStorageError` so the UI can surface it;
  * persistence never fails silently.
  */
+import { loadBlob, removeBlob, saveBlob } from "./blobs";
 
 export interface StorageDriver {
   /** Resolve to the stored value, or null when nothing has been stored yet. */
@@ -15,6 +16,10 @@ export interface StorageDriver {
   save(key: string, value: unknown): Promise<void>;
   /** Synchronous best-effort write, used to flush pending edits on exit. */
   flush(key: string, value: unknown): void;
+  /** Binary attachment storage (IndexedDB in the browser). */
+  saveBlob(key: string, blob: Blob): Promise<void>;
+  loadBlob(key: string): Promise<Blob | null>;
+  removeBlob(key: string): Promise<void>;
 }
 
 export const STORAGE_KEY = "krevo_state_v2";
@@ -67,6 +72,33 @@ const BrowserStorageDriver: StorageDriver = {
       localStorage.setItem(key, JSON.stringify(value));
     } catch (cause) {
       report("Changes could not be saved before closing.", cause);
+    }
+  },
+
+  async saveBlob(key, blob) {
+    try {
+      await saveBlob(key, blob);
+    } catch (cause) {
+      report("The file could not be saved.", cause);
+      throw cause;
+    }
+  },
+
+  async loadBlob(key) {
+    try {
+      return await loadBlob(key);
+    } catch (cause) {
+      report("The file could not be read.", cause);
+      throw cause;
+    }
+  },
+
+  async removeBlob(key) {
+    try {
+      await removeBlob(key);
+    } catch (cause) {
+      report("The file could not be deleted.", cause);
+      throw cause;
     }
   },
 };

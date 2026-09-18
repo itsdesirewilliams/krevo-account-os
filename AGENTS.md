@@ -14,13 +14,13 @@ agency. It tracks four things:
 | Domain | Where it lives today (after Phase 2) |
 |---|---|
 | **Projects** | Accounts → Overview sheet → projects (name, event, quoted amount, status pipeline, payments, date, plan) |
-| **Teams** | Team members (persons + tools) with monthly cost, jobs, SOP refs |
+| **Teams** | Team members (persons + tools) with monthly cost, jobs, SOP files; weekly work + value views |
 | **Money** | Finance view: booked vs collected revenue from projects/payments, costs from team members, expenses slice |
 | **Tasks** | Unified `features/tasks` store — assignee, due date, status, priority, links to project/job/sheet; Tasks section + Home dashboard |
 
-Supporting modules: **Prospecting** (sales sprints → prospect pipeline), **Content** (social
-accounts → scheduled posts, linked to projects), **Plans** (hardcoded pricing plans with social
-deliverables).
+Supporting modules: **Prospecting** (sales sprints → prospect kanban, convert-to-account),
+**Content** (social accounts → posts with a month calendar, linked to projects), **Plans**
+(persisted pricing plans with social deliverables).
 
 **Locked-in product decisions** (made with the owner):
 - **Desktop-only.** The shipping form is a Tauri desktop executable (Phase 4). The Vite browser
@@ -66,7 +66,8 @@ src/
   types.ts                    Core model V4: Account, Sheet (Overview|Custom), Block (union),
                               Project (status/quotedAmount/payments), Payment, Trash, money helpers.
                               Tasks live in features/tasks, not here.
-  storage/index.ts            StorageDriver (load/save/flush) + BrowserStorageDriver + onStorageError
+  storage/index.ts            StorageDriver (load/save/flush + saveBlob/loadBlob/removeBlob) +
+                              BrowserStorageDriver + onStorageError; blobs.ts = IndexedDB store
   state/
     store.tsx                 StoreProvider with SEPARATE state + actions contexts
                               (useStoreState / useStoreActions). Mutations via update() →
@@ -92,11 +93,15 @@ src/
       modals/ProjectDialog (money + status + tasks) · modals/NewProjectDialog
   features/
     team/                     team.types · team.repository (pure, immutable, deep-normalizing)
-                              teamState (usePersistentState) · components/TeamView
+                              teamState (usePersistentState) · teamValue.service (pure weekly
+                              work + cost/value derivation) · components/TeamView ·
+                              MemberWeeklyPanel · TeamWeeklyBoard · WeekNav
     prospecting/              prospecting.types · prospecting.repository (pure, immutable)
                               prospectingState (usePersistentState) · components/ProspectingView
+                              (kanban board + convert-to-account)
     content/                  content.types · content.repository (pure, immutable)
-                              contentState (usePersistentState) · components/ContentView
+                              contentState (usePersistentState) · components/ContentView ·
+                              ContentCalendar (month grid + deliverable fulfillment)
     finance/                  finance.types · finance.repository (pure: expenses + categories)
                               financeState (usePersistentState) · finance.service (pure derivation:
                               booked/collected/expenses/year) · components/FinanceView +
@@ -236,16 +241,18 @@ finance math, and the storage driver.
 - **Exit criteria met:** extraction + selectors + overdue/week logic tested; no task list reads
   from the old locations (84 tests).
 
-### Phase 3 — Feature depth
-- **Team weekly work + value** (§5): `teamValue.service` + per-member weekly view + team-wide
-  weekly board + output-vs-cost trend.
-- **Team**: utilization view (jobs, open assigned tasks, cost rollup); real SOP file
-  attach/download/delete via `StorageDriver.saveBlob/loadBlob` (IndexedDB in browser, fs under
-  Tauri).
-- **Prospecting**: kanban board by status; "Convert to Account" for interested prospects.
-- **Content**: month calendar of posts; deliverable auto-fulfillment offers when a matching post
-  type is linked to a project.
-- Cross-links: "Open in…" navigation between task → project → account → content.
+### Phase 3 — Feature depth ✅ COMPLETE
+- **Team weekly work + value** (§5): pure `teamValue.service` (per-member week metrics, team
+  totals, output-vs-cost trend) + per-member weekly panel + team-wide weekly board (WeekNav
+  shared), derived entirely from Team + Tasks + Projects. Revenue shown as project context only.
+- **Team**: SOP files are real now — attach/download/delete via
+  `StorageDriver.saveBlob/loadBlob/removeBlob` (IndexedDB in the browser).
+- **Prospecting**: kanban board by status (drag to move) + "Convert to Account".
+- **Content**: month calendar of posts + deliverable auto-fulfillment ("Mark plan deliverable
+  done" when a post type matches a plan requirement on the linked project).
+- Cross-links: tasks expose "Open" to jump to the linked project/account or team member.
+- **Exit criteria met:** weekly value/trend + ISO-week logic tested; blob round-trip tested;
+  build + 96 tests green.
 
 ### Phase 4 — Tauri desktop shell + SQLite + in-app auto-update
 - **4.1 Shell** — `src-tauri` crate, `tauri.conf.json` with strict CSP (no remote origins),
@@ -317,7 +324,7 @@ and **remove** what violates them.
 - [x] Phase 0 — Remediation + test infrastructure
 - [x] Phase 1 — Money (schema V4)
 - [x] Phase 2 — Unified tasks + dashboards
-- [ ] Phase 3 — Feature depth (incl. Team weekly work + value)
+- [x] Phase 3 — Feature depth (incl. Team weekly work + value)
 - [ ] Phase 4 — Tauri desktop shell + SQLite + in-app auto-update
 
 *(Check off phases as they complete; add dated progress notes below.)*
@@ -336,3 +343,9 @@ priority and project/job/sheet links; one-time raw-payload migration folded ever
 in and the embedded arrays were removed from the model. ISO-week date utilities; Tasks section
 (filters/group-by/quick-add); Home dashboard (default section). Task cascades on project/job/block
 delete and account/sheet purge. Build green, 84 vitest tests green.
+
+**2026-09-18 — Phase 3 complete.** Weekly work + value (`teamValue.service`, per-member panel,
+team-wide board, trend) derived from Team + Tasks + Projects with revenue as context only; real
+SOP file attach/download/delete via IndexedDB blobs; prospecting kanban + convert-to-account;
+content month calendar + deliverable fulfillment; task "Open" cross-links. Build green, 96 vitest
+tests green.

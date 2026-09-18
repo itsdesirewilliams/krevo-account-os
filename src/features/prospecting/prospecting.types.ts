@@ -28,6 +28,8 @@ export interface Prospect {
   website: string;
   notes: string;
   status: ProspectStatus;
+  /** Set once the prospect is converted into an account. */
+  convertedAccountId?: string | null;
   createdAt: string;
 }
 

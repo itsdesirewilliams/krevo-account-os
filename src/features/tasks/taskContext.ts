@@ -1,4 +1,7 @@
+import { useMemo } from "react";
 import { useStoreState } from "../../state/store";
+import { useUI } from "../../state/ui";
+import { useNav } from "../../state/nav";
 import { useTeam } from "../team/teamState";
 import { overviewOf } from "../../types";
 import type { TaskLinks } from "./tasks.types";
@@ -28,4 +31,32 @@ export function useTaskContextLabel(): (links: TaskLinks) => string {
     }
     return "";
   };
+}
+
+/** Cross-links: open the entity a task is attached to ("Open in…"). */
+export function useTaskContextNav(): { canOpen: (links: TaskLinks) => boolean; open: (links: TaskLinks) => void } {
+  const state = useStoreState();
+  const { data: team } = useTeam();
+  const ui = useUI();
+  const { selectMember, setActiveSection } = useNav();
+
+  return useMemo(
+    () => ({
+      canOpen: (links) => Boolean((links.projectId && links.accountId) || links.jobId),
+      open: (links) => {
+        if (links.projectId && links.accountId && state.accounts.some((a) => a.id === links.accountId)) {
+          ui.openProject(links.accountId, links.projectId);
+          return;
+        }
+        if (links.jobId) {
+          const member = team.members.find((m) => m.jobs.some((j) => j.id === links.jobId));
+          if (member) {
+            selectMember(member.id);
+            setActiveSection("team");
+          }
+        }
+      },
+    }),
+    [state.accounts, team, ui, selectMember, setActiveSection],
+  );
 }

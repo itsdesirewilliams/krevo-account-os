@@ -5,6 +5,7 @@ import {
   createSprint,
   defaultProspectingData,
   deleteSprint,
+  markConverted,
   normalizeProspectingData,
   renameSprint,
 } from "./prospecting.repository";
@@ -40,6 +41,14 @@ describe("normalizeProspectingData", () => {
     });
     expect(data.prospects.map((p) => p.id)).toEqual(["p1"]);
   });
+
+  it("preserves a converted account id", () => {
+    const data = normalizeProspectingData({
+      sprints: [{ id: "s1" }],
+      prospects: [{ id: "p1", sprintId: "s1", convertedAccountId: "acc9" }],
+    });
+    expect(first(data.prospects).convertedAccountId).toBe("acc9");
+  });
 });
 
 describe("prospecting operations", () => {
@@ -50,9 +59,19 @@ describe("prospecting operations", () => {
     expect(withSprint.sprints).toHaveLength(1);
 
     const sprintId = first(withSprint.sprints).id;
-    const withProspect = createProspect(withSprint, sprintId, "ACME");
-    expect(withProspect.prospects[0]).toMatchObject({ companyName: "ACME", status: "not-contacted" });
+    const withProspect = createProspect(withSprint, sprintId, "ACME", "", "", "interested");
+    expect(withProspect.prospects[0]).toMatchObject({ companyName: "ACME", status: "interested" });
     expect(withSprint.prospects).toEqual([]);
+  });
+
+  it("marks a prospect converted into an account", () => {
+    const data = createSprint(defaultProspectingData(), "Q1", "");
+    const sprintId = first(data.sprints).id;
+    const withProspect = createProspect(data, sprintId, "ACME");
+    const prospectId = first(withProspect.prospects).id;
+
+    const converted = markConverted(withProspect, prospectId, "acc1");
+    expect(first(converted.prospects)).toMatchObject({ convertedAccountId: "acc1", status: "interested" });
   });
 
   it("cascades sprint deletion to its prospects", () => {

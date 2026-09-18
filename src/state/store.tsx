@@ -32,7 +32,7 @@ import { useFlushOnExit } from "./persist";
 import { STORAGE_KEY, storage } from "../storage";
 
 export interface StoreActions {
-  createAccount: (name: string) => void;
+  createAccount: (name: string) => string;
   openAccount: (id: string) => void;
   closeTab: (id: string) => void;
   renameAccount: (id: string, name: string) => void;
@@ -138,6 +138,7 @@ export function StoreProvider({ initialState, children }: { initialState: AppSta
           s.activeAccountId = account.id;
           s.showTrash = false;
         });
+        return account.id;
       },
       openAccount(id) {
         update((s) => {

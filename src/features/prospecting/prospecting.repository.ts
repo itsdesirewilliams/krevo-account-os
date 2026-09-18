@@ -33,7 +33,7 @@ function normalizeSprint(raw: unknown): Sprint {
 
 function normalizeProspect(raw: unknown): Prospect {
   const p = (raw && typeof raw === "object" ? raw : {}) as Partial<Prospect>;
-  return {
+  const prospect: Prospect = {
     id: p.id || genId(),
     sprintId: p.sprintId || "",
     companyName: p.companyName == null ? "" : p.companyName,
@@ -42,6 +42,10 @@ function normalizeProspect(raw: unknown): Prospect {
     status: isStatus(p.status) ? p.status : "not-contacted",
     createdAt: p.createdAt || nowIso(),
   };
+  if (typeof p.convertedAccountId === "string" && p.convertedAccountId !== "") {
+    prospect.convertedAccountId = p.convertedAccountId;
+  }
+  return prospect;
 }
 
 /** Repairs any missing fields and drops prospects whose sprint is gone. */
@@ -88,6 +92,7 @@ export function createProspect(
   companyName: string,
   website = "",
   notes = "",
+  status: ProspectStatus = "not-contacted",
 ): ProspectingData {
   const prospect: Prospect = {
     id: genId(),
@@ -95,7 +100,7 @@ export function createProspect(
     companyName: companyName.trim(),
     website: website.trim(),
     notes: notes.trim(),
-    status: "not-contacted",
+    status,
     createdAt: nowIso(),
   };
   return { ...data, prospects: [...data.prospects, prospect] };
@@ -111,4 +116,14 @@ export function updateProspect(
 
 export function deleteProspect(data: ProspectingData, id: string): ProspectingData {
   return { ...data, prospects: data.prospects.filter((p) => p.id !== id) };
+}
+
+/** Record that a prospect was converted into an account. */
+export function markConverted(data: ProspectingData, id: string, accountId: string): ProspectingData {
+  return {
+    ...data,
+    prospects: data.prospects.map((p) =>
+      p.id === id ? { ...p, convertedAccountId: accountId, status: "interested" } : p,
+    ),
+  };
 }

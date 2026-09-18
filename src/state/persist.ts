@@ -14,8 +14,9 @@ import {
   type SetStateAction,
 } from "react";
 import { storage } from "../storage";
+import { registerFlushHandler } from "./flush";
 
-/** Flush the latest value to storage when the page is hidden or closed. */
+/** Flush the latest value to storage when the page is hidden, or on app exit. */
 export function useFlushOnExit<T>(key: string, valueRef: MutableRefObject<T>): void {
   useEffect(() => {
     const flush = () => storage.flush(key, valueRef.current);
@@ -24,9 +25,11 @@ export function useFlushOnExit<T>(key: string, valueRef: MutableRefObject<T>): v
     };
     window.addEventListener("pagehide", flush);
     document.addEventListener("visibilitychange", onVisibilityChange);
+    const unregister = registerFlushHandler(() => storage.save(key, valueRef.current));
     return () => {
       window.removeEventListener("pagehide", flush);
       document.removeEventListener("visibilitychange", onVisibilityChange);
+      unregister();
     };
   }, [key, valueRef]);
 }

@@ -15,6 +15,7 @@ import { ContentView } from "./features/content/components/ContentView";
 import { FinanceView } from "./features/finance/components/FinanceView";
 import { HomeView } from "./features/home/components/HomeView";
 import { TasksView } from "./features/tasks/components/TasksView";
+import { SettingsView } from "./features/settings/components/SettingsView";
 
 function EmptyState() {
   const state = useStoreState();
@@ -66,6 +67,8 @@ function MainContent() {
       return <ContentView />;
     case "finance":
       return <FinanceView />;
+    case "settings":
+      return <SettingsView />;
     default:
       return <AccountsWorkspace />;
   }

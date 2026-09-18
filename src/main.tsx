@@ -10,7 +10,8 @@ import { StoreProvider } from "./state/store";
 import { UIProvider } from "./state/ui";
 import { NavProvider } from "./state/nav";
 import { defaultState, normalize } from "./state/normalize";
-import { STORAGE_KEY, storage } from "./storage";
+import { STORAGE_KEY, isTauri, storage } from "./storage";
+import { flushAll } from "./state/flush";
 import { TeamProvider } from "./features/team/teamState";
 import { TEAM_KEY } from "./features/team/team.repository";
 import { ProspectingProvider } from "./features/prospecting/prospectingState";
@@ -18,6 +19,7 @@ import { ContentProvider } from "./features/content/contentState";
 import { FinanceProvider } from "./features/finance/financeState";
 import { PlansProvider } from "./features/plans/plansState";
 import { TasksProvider } from "./features/tasks/tasksState";
+import { SettingsProvider } from "./features/settings/settingsState";
 import {
   TASKS_KEY,
   extractLegacyTasks,
@@ -48,6 +50,21 @@ async function migrateLegacyTasks(rawAccounts: unknown): Promise<void> {
   await storage.save(TASKS_KEY, merged);
 }
 
+async function installDesktopExitFlush(): Promise<void> {
+  if (!isTauri()) return;
+  try {
+    const { listen } = await import("@tauri-apps/api/event");
+    const { invoke } = await import("@tauri-apps/api/core");
+    // The Rust close handler prevents the window close and asks the frontend to
+    // flush pending writes; we then exit explicitly.
+    await listen("request-flush", () => {
+      void flushAll().finally(() => void invoke("exit_app"));
+    });
+  } catch (cause) {
+    console.error("[desktop] could not install the exit-flush handler", cause);
+  }
+}
+
 async function bootstrap() {
   let initial: AppState = defaultState();
   let loaded = false;
@@ -63,6 +80,7 @@ async function bootstrap() {
 
   await migrateLegacyTasks(rawAccounts);
   if (loaded) void storage.save(STORAGE_KEY, initial);
+  await installDesktopExitFlush();
 
   const container = document.getElementById("root");
   if (!container) throw new Error("Root container #root is missing from index.html");
@@ -78,7 +96,9 @@ async function bootstrap() {
                   <FinanceProvider>
                     <PlansProvider>
                       <TasksProvider>
-                        <App />
+                        <SettingsProvider>
+                          <App />
+                        </SettingsProvider>
                       </TasksProvider>
                     </PlansProvider>
                   </FinanceProvider>

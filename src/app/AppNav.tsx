@@ -18,6 +18,7 @@ const LABELS: Record<Section, string> = {
   prospecting: "PROSPECTING",
   content: "CONTENT",
   finance: "FINANCE",
+  settings: "SETTINGS",
 };
 
 const COLOR_FILTERS: { id: string; label: string; value: AccountColorFilter }[] = [

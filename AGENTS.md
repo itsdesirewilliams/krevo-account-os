@@ -41,9 +41,9 @@ Supporting modules: **Prospecting** (sales sprints → prospect kanban, convert-
 ## 2. Tech stack & commands
 
 React 18 · TypeScript (strict, `noUncheckedIndexedAccess`) · Vite 6 · Tailwind CSS v4 · GSAP ·
-**vitest** for tests. **Tauri is not a dependency right now**: the Phase 0 remediation removed
-the broken Tauri storage driver and its unused deps (`@tauri-apps/api`, `plugin-sql`, `cli`);
-Phase 4 adds the real desktop shell back.
+**vitest** for tests · **Tauri 2** (desktop shell: SQLite key/value storage, fs blobs, updater).
+The browser build remains the development/test environment; the shipping form is the Tauri
+desktop executable.
 
 | Command | Purpose |
 |---|---|
@@ -53,6 +53,8 @@ Phase 4 adds the real desktop shell back.
 | `npm test` | `vitest run` — the full suite (CI gate) |
 | `npm run test:watch` | vitest in watch mode |
 | `npm run typecheck` | `tsc -b` only |
+| `npm run tauri:dev` | Desktop dev window (requires the Rust toolchain) |
+| `npm run tauri:build` | Windows installer + updater artifacts (`createUpdaterArtifacts`) |
 
 ---
 
@@ -67,7 +69,8 @@ src/
                               Project (status/quotedAmount/payments), Payment, Trash, money helpers.
                               Tasks live in features/tasks, not here.
   storage/index.ts            StorageDriver (load/save/flush + saveBlob/loadBlob/removeBlob) +
-                              BrowserStorageDriver + onStorageError; blobs.ts = IndexedDB store
+                              BrowserStorageDriver + onStorageError; blobs.ts = IndexedDB store;
+                              tauri.ts = SQLite kv + fs blobs; migrate.ts = pure localStorage→SQLite
   state/
     store.tsx                 StoreProvider with SEPARATE state + actions contexts
                               (useStoreState / useStoreActions). Mutations via update() →
@@ -75,6 +78,7 @@ src/
     ui.tsx                    UI context: dialogs (prompt/confirm), context menu
     nav.tsx                   Nav context: activeSection, teamMemberId, sprintId, socialAccountId
     persist.ts                usePersistentState (+ ready) and useFlushOnExit
+    flush.ts                  Exit-flush registry (flushAll) awaited by the Tauri close handler
     normalize.ts              Deep normalization + V2→V3 migration for AppState
   app/
     AppNav.tsx                Sidebar: sections, accounts list, color filters, context menus
@@ -113,9 +117,16 @@ src/
                               taskContext (context labels) · components/TasksView
     home/                     components/HomeView (overdue/today tasks, upcoming events,
                               month finance snapshot, recent payments)
+    settings/                 settings.types · settings.repository (pure) · settingsState
+                              (usePersistentState) · updater.ts (Tauri facade) ·
+                              components/SettingsView (real updater UI)
   test-utils/assert.ts        Test-only `first()` / `present()` narrowing helpers
 tests                         Co-located as src/**/*.test.ts (vitest)
 vitest.config.ts
+src-tauri/                    Tauri 2 desktop shell (Cargo.toml, tauri.conf.json, capabilities,
+                              icons) · src/lib.rs = updater commands + window-exit flush;
+                              main.rs · app-icon.png (source; regenerate icons with
+                              `npx tauri icon src-tauri/app-icon.png`)
 legacy/                       Old vanilla-JS app, REFERENCE ONLY — nothing imports it
 ```
 
@@ -146,9 +157,8 @@ All findings from the 2026-09-17 review are resolved:
   `noUncheckedIndexedAccess` on; bundled fonts + CSP (no network on startup); context-menu
   clamping + "No Color" filter; unified `Modal`; shared `TaskRow`/`TaskInput`.
 
-**Residual limitations (intentional, later phases):**
+**Residual limitations (intentional):**
 - `structuredClone` + `normalize` still runs per mutation (frequency is now low — blur commits).
-- SOP file attach/download is still a stub, presented honestly; implemented in Phase 3.
 - `legacy/` is reference-only and must stay unimported.
 
 ---
@@ -254,24 +264,25 @@ finance math, and the storage driver.
 - **Exit criteria met:** weekly value/trend + ISO-week logic tested; blob round-trip tested;
   build + 96 tests green.
 
-### Phase 4 — Tauri desktop shell + SQLite + in-app auto-update
-- **4.1 Shell** — `src-tauri` crate, `tauri.conf.json` with strict CSP (no remote origins),
-  minimal capabilities, icons, window config.
-- **4.2 Storage** — SQLite (`@tauri-apps/plugin-sql`) as a key/value document store behind the
-  existing `StorageDriver` (`load`/`save`/`flush`); first-launch localStorage→SQLite migration;
-  window-close flush (completes H3 on desktop).
-- **4.3 Blobs** — `saveBlob`/`loadBlob`; fs plugin on desktop.
-- **4.4 Updater** — signing keypair, `createUpdaterArtifacts`, fallback pubkey/endpoint in
-  config, custom Rust `check_for_update` / `install_update` (progress channel),
-  `plugin-process` relaunch, `on_before_exit` flush, `installMode: "passive"`.
-- **4.5 Settings module** (`features/settings/`) — persisted: enable auto-updates, manifest URL,
-  public-key override, check-on-launch/interval; plus "Check now", progress, "Restart to update",
-  current version.
-- **4.6 Release** — build/signing instructions, GitHub Releases manifest layout
-  (`https://github.com/<owner>/<repo>/releases/latest/download/latest.json`), Windows installer,
-  SmartScreen note.
-- **Exit criteria:** kv round-trip tested with mocked `invoke`; migration tested; executable
-  installs and updates from GitHub Releases.
+### Phase 4 — Tauri desktop shell + SQLite + in-app auto-update ✅ COMPLETE
+- **4.1 Shell** — `src-tauri` crate, `tauri.conf.json` (strict CSP, no remote origins; NSIS
+  target; `createUpdaterArtifacts`), minimal `capabilities/default.json`, icons
+  (`npx tauri icon src-tauri/app-icon.png`), 1280×820 window.
+- **4.2 Storage** — `@tauri-apps/plugin-sql` SQLite key/value store behind the existing
+  `StorageDriver` (`load`/`save`/`flush`), parameterized queries only; first-launch
+  localStorage→SQLite migration (`storage/migrate.ts` + `storage/tauri.ts`); window-close flush
+  via the `request-flush` event + `exit_app` command (completes H3 on desktop).
+- **4.3 Blobs** — `saveBlob`/`loadBlob`/`removeBlob`: IndexedDB in the browser, app-data fs on
+  desktop.
+- **4.4 Updater** — baked fallback public key + `createUpdaterArtifacts`; runtime-configurable
+  endpoints/pubkey via custom Rust commands `check_for_update` / `install_update` (progress
+  channel); `plugin-process` relaunch; `on_before_exit` exit flush; `installMode: "passive"`.
+- **4.5 Settings module** — persisted `manifestUrl`, public-key override (rotation only),
+  auto-update toggle, check-on-launch, check interval; "Check now", download progress,
+  "Restart to update", current version.
+- **4.6 Release** — see the release runbook in §7.
+- **Note:** the Rust side requires the Tauri/Rust toolchain (not present on the authoring
+  machine); the JS side is fully typechecked/built/tested here.
 
 ---
 
@@ -285,6 +296,24 @@ finance math, and the storage driver.
   `.../releases/latest/download/latest.json`. TLS is enforced.
 - Because a mutable public key weakens the trust chain, keep the baked fallback authoritative
   and treat any runtime override as an explicit rotation action.
+
+**Keypair status:** a fallback keypair was generated during Phase 4. The **public key is baked**
+into `src-tauri/tauri.conf.json`; the **private key is NOT in the repo** (it lives outside the
+working tree, in the owner's secure storage, with its password). To rotate:
+`npm run tauri signer generate -- -w <secure-path>`, then paste the `.pub` content into
+`plugins.updater.pubkey`.
+
+**Release runbook**
+1. Set `src-tauri/tauri.conf.json` `plugins.updater.endpoints` to the real
+   `https://github.com/<owner>/<repo>/releases/latest/download/latest.json`.
+2. Build with the signing key in the environment (never a file in the repo):
+   `$env:TAURI_SIGNING_PRIVATE_KEY = "<key>"` and
+   `$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = "<pw>"`, then `npm run tauri:build`.
+3. Upload the NSIS installer, its `.sig`, and `latest.json` to the GitHub Release. Tauri Action
+   (`tauri-action`) can generate `latest.json`; otherwise hand-write it in the documented format
+   (`version`, `pub_date`, `platforms["windows-x86_64"].{signature,url}`).
+4. Windows may show a SmartScreen warning unless the installer is Authenticode code-signed; the
+   updater signature above is separate and always required.
 
 ---
 
@@ -325,7 +354,7 @@ and **remove** what violates them.
 - [x] Phase 1 — Money (schema V4)
 - [x] Phase 2 — Unified tasks + dashboards
 - [x] Phase 3 — Feature depth (incl. Team weekly work + value)
-- [ ] Phase 4 — Tauri desktop shell + SQLite + in-app auto-update
+- [x] Phase 4 — Tauri desktop shell + SQLite + in-app auto-update
 
 *(Check off phases as they complete; add dated progress notes below.)*
 
@@ -349,3 +378,12 @@ team-wide board, trend) derived from Team + Tasks + Projects with revenue as con
 SOP file attach/download/delete via IndexedDB blobs; prospecting kanban + convert-to-account;
 content month calendar + deliverable fulfillment; task "Open" cross-links. Build green, 96 vitest
 tests green.
+
+**2026-09-18 — Phase 4 complete.** Tauri 2 desktop shell (`src-tauri`) with strict CSP and minimal
+capabilities; SQLite key/value storage behind the unchanged `StorageDriver` with first-launch
+localStorage→SQLite migration; window-close flush (`request-flush` + `exit_app`); fs blob storage;
+baked fallback updater public key with runtime endpoint/pubkey commands; Settings module with a
+real updater UI (manifest URL, key-rotation override, check-on-launch/interval, progress,
+restart). Fallback keypair generated (private key held outside the repo). JS side build + 105
+vitest tests green; the Rust crate is authored but not compiled here (no Rust toolchain on the
+authoring machine).

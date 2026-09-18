@@ -9,20 +9,25 @@
  * persistence never fails silently.
  */
 import { loadBlob, removeBlob, saveBlob } from "./blobs";
+import { tauriStorage } from "./tauri";
 
 export interface StorageDriver {
   /** Resolve to the stored value, or null when nothing has been stored yet. */
   load(key: string): Promise<unknown>;
   save(key: string, value: unknown): Promise<void>;
-  /** Synchronous best-effort write, used to flush pending edits on exit. */
-  flush(key: string, value: unknown): void;
-  /** Binary attachment storage (IndexedDB in the browser). */
+  /** Best-effort write on exit; synchronous in the browser, awaited on desktop. */
+  flush(key: string, value: unknown): void | Promise<void>;
+  /** Binary attachment storage (IndexedDB in the browser, fs on desktop). */
   saveBlob(key: string, blob: Blob): Promise<void>;
   loadBlob(key: string): Promise<Blob | null>;
   removeBlob(key: string): Promise<void>;
 }
 
 export const STORAGE_KEY = "krevo_state_v2";
+
+/** True when running inside the Tauri desktop shell. */
+export const isTauri = (): boolean =>
+  typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 export interface StorageError {
   message: string;
@@ -103,4 +108,4 @@ const BrowserStorageDriver: StorageDriver = {
   },
 };
 
-export const storage: StorageDriver = BrowserStorageDriver;
+export const storage: StorageDriver = isTauri() ? tauriStorage : BrowserStorageDriver;

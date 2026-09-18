@@ -4,24 +4,12 @@
  */
 import { genId } from "../../lib/id";
 import { nowIso } from "../../lib/dates";
-import type { Job, JobTask, MemberType, SopRef, TeamData, TeamMember } from "./team.types";
+import type { Job, MemberType, SopRef, TeamData, TeamMember } from "./team.types";
 
 export const TEAM_KEY = "krevo_team_v1";
 
 export function defaultTeamData(): TeamData {
   return { members: [] };
-}
-
-function normalizeTask(t: Partial<JobTask>, jobId: string): JobTask {
-  const now = nowIso();
-  return {
-    id: t.id || genId(),
-    jobId: t.jobId || jobId,
-    text: t.text == null ? "" : t.text,
-    completed: !!t.completed,
-    createdAt: t.createdAt || now,
-    updatedAt: t.updatedAt || now,
-  };
 }
 
 function normalizeSop(s: Partial<SopRef> | null | undefined, jobId: string): SopRef | null {
@@ -48,7 +36,6 @@ function normalizeJob(j: Partial<Job>): Job {
     category: j.category == null ? "" : j.category,
     active: j.active !== false,
     sop: normalizeSop(j.sop, id),
-    tasks: Array.isArray(j.tasks) ? j.tasks.map((t) => normalizeTask(t, id)) : [],
     createdAt: j.createdAt || now,
     updatedAt: j.updatedAt || now,
   };
@@ -139,7 +126,6 @@ export function addJob(
     category: input.category.trim(),
     active: input.active,
     sop: null,
-    tasks: [],
     createdAt: now,
     updatedAt: now,
   };
@@ -182,80 +168,6 @@ export function setJobSop(data: TeamData, memberId: string, jobId: string, sop: 
     members: data.members.map((m) =>
       m.id === memberId
         ? stamp({ ...m, jobs: m.jobs.map((j) => (j.id === jobId ? stamp({ ...j, sop }) : j)) })
-        : m,
-    ),
-  };
-}
-
-/* ---------------- Job tasks ---------------- */
-
-export function addJobTask(data: TeamData, memberId: string, jobId: string, text: string): TeamData {
-  const value = text.trim();
-  if (!value) return data;
-  const now = nowIso();
-  const task: JobTask = { id: genId(), jobId, text: value, completed: false, createdAt: now, updatedAt: now };
-  return {
-    ...data,
-    members: data.members.map((m) =>
-      m.id === memberId
-        ? stamp({ ...m, jobs: m.jobs.map((j) => (j.id === jobId ? stamp({ ...j, tasks: [...j.tasks, task] }) : j)) })
-        : m,
-    ),
-  };
-}
-
-export function toggleJobTask(data: TeamData, memberId: string, jobId: string, taskId: string): TeamData {
-  return {
-    ...data,
-    members: data.members.map((m) =>
-      m.id === memberId
-        ? stamp({
-            ...m,
-            jobs: m.jobs.map((j) =>
-              j.id === jobId
-                ? stamp({
-                    ...j,
-                    tasks: j.tasks.map((t) =>
-                      t.id === taskId ? { ...t, completed: !t.completed, updatedAt: nowIso() } : t,
-                    ),
-                  })
-                : j,
-            ),
-          })
-        : m,
-    ),
-  };
-}
-
-export function setJobTaskText(data: TeamData, memberId: string, jobId: string, taskId: string, text: string): TeamData {
-  return {
-    ...data,
-    members: data.members.map((m) =>
-      m.id === memberId
-        ? stamp({
-            ...m,
-            jobs: m.jobs.map((j) =>
-              j.id === jobId
-                ? stamp({ ...j, tasks: j.tasks.map((t) => (t.id === taskId ? { ...t, text, updatedAt: nowIso() } : t)) })
-                : j,
-            ),
-          })
-        : m,
-    ),
-  };
-}
-
-export function deleteJobTask(data: TeamData, memberId: string, jobId: string, taskId: string): TeamData {
-  return {
-    ...data,
-    members: data.members.map((m) =>
-      m.id === memberId
-        ? stamp({
-            ...m,
-            jobs: m.jobs.map((j) =>
-              j.id === jobId ? stamp({ ...j, tasks: j.tasks.filter((t) => t.id !== taskId) }) : j,
-            ),
-          })
         : m,
     ),
   };

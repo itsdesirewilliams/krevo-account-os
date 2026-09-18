@@ -12,32 +12,64 @@ import { NavProvider } from "./state/nav";
 import { defaultState, normalize } from "./state/normalize";
 import { STORAGE_KEY, storage } from "./storage";
 import { TeamProvider } from "./features/team/teamState";
+import { TEAM_KEY } from "./features/team/team.repository";
 import { ProspectingProvider } from "./features/prospecting/prospectingState";
 import { ContentProvider } from "./features/content/contentState";
 import { FinanceProvider } from "./features/finance/financeState";
 import { PlansProvider } from "./features/plans/plansState";
+import { TasksProvider } from "./features/tasks/tasksState";
+import {
+  TASKS_KEY,
+  extractLegacyTasks,
+  mergeTasks,
+  normalizeTasksData,
+} from "./features/tasks/tasks.repository";
 import type { AppState } from "./types";
 
-async function loadInitialState(): Promise<{ state: AppState; loaded: boolean }> {
+/**
+ * One-time migration: fold tasks embedded in the pre-unification stores
+ * (project tasks, sheet to-do blocks/V2 sheet tasks, job tasks) into the
+ * unified task store. Accounts/team are normalized afterwards, which drops
+ * the embedded copies.
+ */
+async function migrateLegacyTasks(rawAccounts: unknown): Promise<void> {
+  let rawTeam: unknown = null;
+  let rawTasks: unknown = null;
   try {
-    return { state: normalize(await storage.load(STORAGE_KEY)), loaded: true };
+    [rawTeam, rawTasks] = await Promise.all([storage.load(TEAM_KEY), storage.load(TASKS_KEY)]);
   } catch {
-    // storage.load already reported the failure. Start from defaults but do not
-    // overwrite the unreadable payload, so it can still be recovered by hand.
-    return { state: defaultState(), loaded: false };
+    return; // storage already reported; skip migration rather than risk partial state
   }
+
+  const legacy = extractLegacyTasks(rawAccounts, rawTeam);
+  if (legacy.length === 0) return;
+
+  const merged = mergeTasks(normalizeTasksData(rawTasks), legacy);
+  await storage.save(TASKS_KEY, merged);
 }
 
 async function bootstrap() {
-  const { state, loaded } = await loadInitialState();
-  if (loaded) void storage.save(STORAGE_KEY, state);
+  let initial: AppState = defaultState();
+  let loaded = false;
+  let rawAccounts: unknown = null;
+  try {
+    rawAccounts = await storage.load(STORAGE_KEY);
+    initial = normalize(rawAccounts);
+    loaded = true;
+  } catch {
+    // storage.load already reported the failure. Start from defaults but do not
+    // overwrite the unreadable payload, so it can still be recovered by hand.
+  }
+
+  await migrateLegacyTasks(rawAccounts);
+  if (loaded) void storage.save(STORAGE_KEY, initial);
 
   const container = document.getElementById("root");
   if (!container) throw new Error("Root container #root is missing from index.html");
 
   createRoot(container).render(
     <StrictMode>
-      <StoreProvider initialState={state}>
+      <StoreProvider initialState={initial}>
         <UIProvider>
           <NavProvider>
             <TeamProvider>
@@ -45,7 +77,9 @@ async function bootstrap() {
                 <ContentProvider>
                   <FinanceProvider>
                     <PlansProvider>
-                      <App />
+                      <TasksProvider>
+                        <App />
+                      </TasksProvider>
                     </PlansProvider>
                   </FinanceProvider>
                 </ContentProvider>

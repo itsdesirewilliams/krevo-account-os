@@ -26,13 +26,10 @@ import type {
   Project,
   ProjectStatus,
   Sheet,
-  Task,
 } from "../types";
 import { normalize } from "./normalize";
 import { useFlushOnExit } from "./persist";
 import { STORAGE_KEY, storage } from "../storage";
-
-const makeTask = (text: string): Task => ({ id: genId(), text, completed: false });
 
 export interface StoreActions {
   createAccount: (name: string) => void;
@@ -49,11 +46,7 @@ export interface StoreActions {
   addBlock: (accountId: string, sheetId: string, type: "notes" | "todo") => void;
   deleteBlock: (accountId: string, sheetId: string, blockId: string) => void;
   setBlockNotes: (accountId: string, sheetId: string, blockId: string, text: string) => void;
-  addBlockTask: (accountId: string, sheetId: string, blockId: string, text: string) => void;
-  toggleBlockTask: (accountId: string, sheetId: string, blockId: string, taskId: string) => void;
-  deleteBlockTask: (accountId: string, sheetId: string, blockId: string, taskId: string) => void;
-  setBlockTaskText: (accountId: string, sheetId: string, blockId: string, taskId: string, text: string) => void;
-  createProject: (accountId: string, data: Omit<Project, "id" | "tasks" | "payments">) => void;
+  createProject: (accountId: string, data: Omit<Project, "id" | "payments">) => void;
   setProjectField: (
     accountId: string,
     projectId: string,
@@ -73,10 +66,6 @@ export interface StoreActions {
   setProjectPlan: (accountId: string, projectId: string, planId: string | null) => void;
   toggleProjectDeliverable: (accountId: string, projectId: string, deliverableId: "collab-repost" | "promo-flyer") => void;
   deleteProject: (accountId: string, projectId: string) => void;
-  addProjectTask: (accountId: string, projectId: string, text: string) => void;
-  toggleProjectTask: (accountId: string, projectId: string, taskId: string) => void;
-  deleteProjectTask: (accountId: string, projectId: string, taskId: string) => void;
-  setProjectTaskText: (accountId: string, projectId: string, taskId: string, text: string) => void;
   showTrash: () => void;
   hideTrash: () => void;
   restoreAccount: (id: string) => void;
@@ -246,7 +235,7 @@ export function StoreProvider({ initialState, children }: { initialState: AppSta
           const sheet = withSheet(s, accountId, sheetId);
           if (!sheet || isOverview(sheet)) return;
           const block: Block =
-            type === "todo" ? { id: genId(), type: "todo", tasks: [] } : { id: genId(), type: "notes", text: "" };
+            type === "todo" ? { id: genId(), type: "todo" } : { id: genId(), type: "notes", text: "" };
           sheet.blocks.push(block);
         });
       },
@@ -263,43 +252,6 @@ export function StoreProvider({ initialState, children }: { initialState: AppSta
           if (!sheet || isOverview(sheet)) return;
           const b = sheet.blocks.find((x) => x.id === blockId);
           if (b && b.type === "notes") b.text = text;
-        });
-      },
-
-      // ---- Block tasks ----
-      addBlockTask(accountId, sheetId, blockId, text) {
-        const value = text.trim();
-        if (!value) return;
-        update((s) => {
-          const sheet = withSheet(s, accountId, sheetId);
-          if (!sheet || isOverview(sheet)) return;
-          const b = sheet.blocks.find((x) => x.id === blockId);
-          if (b && b.type === "todo") b.tasks.push(makeTask(value));
-        });
-      },
-      toggleBlockTask(accountId, sheetId, blockId, taskId) {
-        update((s) => {
-          const sheet = withSheet(s, accountId, sheetId);
-          const b = sheet && !isOverview(sheet) ? sheet.blocks.find((x) => x.id === blockId) : undefined;
-          const t = b && b.type === "todo" ? b.tasks.find((x) => x.id === taskId) : undefined;
-          if (t) t.completed = !t.completed;
-        });
-      },
-      deleteBlockTask(accountId, sheetId, blockId, taskId) {
-        update((s) => {
-          const sheet = withSheet(s, accountId, sheetId);
-          if (!sheet || isOverview(sheet)) return;
-          const b = sheet.blocks.find((x) => x.id === blockId);
-          if (b && b.type === "todo") b.tasks = b.tasks.filter((t) => t.id !== taskId);
-        });
-      },
-      setBlockTaskText(accountId, sheetId, blockId, taskId, text) {
-        update((s) => {
-          const sheet = withSheet(s, accountId, sheetId);
-          if (!sheet || isOverview(sheet)) return;
-          const b = sheet.blocks.find((x) => x.id === blockId);
-          const t = b && b.type === "todo" ? b.tasks.find((x) => x.id === taskId) : undefined;
-          if (t) t.text = text;
         });
       },
 
@@ -320,7 +272,6 @@ export function StoreProvider({ initialState, children }: { initialState: AppSta
             eventDate: data.eventDate || "",
             planId: data.planId ?? null,
             deliverables: data.deliverables ?? null,
-            tasks: [],
           });
         });
       },
@@ -398,46 +349,6 @@ export function StoreProvider({ initialState, children }: { initialState: AppSta
           const a = withAccount(s, accountId);
           const overview = a ? overviewOf(a) : null;
           if (overview) overview.projects = overview.projects.filter((x) => x.id !== projectId);
-        });
-      },
-
-      // ---- Project tasks ----
-      addProjectTask(accountId, projectId, text) {
-        const value = text.trim();
-        if (!value) return;
-        update((s) => {
-          const a = withAccount(s, accountId);
-          const overview = a ? overviewOf(a) : null;
-          const p = overview ? overview.projects.find((x) => x.id === projectId) : undefined;
-          if (p) p.tasks.push(makeTask(value));
-        });
-      },
-      toggleProjectTask(accountId, projectId, taskId) {
-        update((s) => {
-          const a = withAccount(s, accountId);
-          const overview = a ? overviewOf(a) : null;
-          const p = overview ? overview.projects.find((x) => x.id === projectId) : undefined;
-          const t = p ? p.tasks.find((x) => x.id === taskId) : undefined;
-          if (t) t.completed = !t.completed;
-        });
-      },
-      deleteProjectTask(accountId, projectId, taskId) {
-        update((s) => {
-          const a = withAccount(s, accountId);
-          const overview = a ? overviewOf(a) : null;
-          if (overview) {
-            const p = overview.projects.find((x) => x.id === projectId);
-            if (p) p.tasks = p.tasks.filter((t) => t.id !== taskId);
-          }
-        });
-      },
-      setProjectTaskText(accountId, projectId, taskId, text) {
-        update((s) => {
-          const a = withAccount(s, accountId);
-          const overview = a ? overviewOf(a) : null;
-          const p = overview ? overview.projects.find((x) => x.id === projectId) : undefined;
-          const t = p ? p.tasks.find((x) => x.id === taskId) : undefined;
-          if (t) t.text = text;
         });
       },
 

@@ -11,7 +11,9 @@ import { TrashIcon, PlusIcon, FolderIcon } from "../components/Icons";
 import { ACCOUNT_COLORS, type AccountColorFilter } from "../types";
 
 const LABELS: Record<Section, string> = {
+  home: "HOME",
   accounts: "ACCOUNTS",
+  tasks: "TASKS",
   team: "TEAM",
   prospecting: "PROSPECTING",
   content: "CONTENT",

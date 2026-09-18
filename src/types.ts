@@ -10,12 +10,6 @@
  * existing persisted data (storage key "krevo_state_v2") loads unchanged.
  */
 
-export interface Task {
-  id: string;
-  text: string;
-  completed: boolean;
-}
-
 /** Project pipeline status (V4). Finance excludes unconfirmed deals by default. */
 export type ProjectStatus = "lead" | "confirmed" | "delivered" | "on_hold" | "cancelled";
 
@@ -57,7 +51,6 @@ export interface Project {
   planId?: string | null;
   /** Per-plan social requirement completion (see features/plans). */
   deliverables?: { "collab-repost"?: boolean; "promo-flyer"?: boolean } | null;
-  tasks: Task[];
 }
 
 export interface OverviewSheet {
@@ -72,10 +65,10 @@ export interface NotesBlock {
   text: string;
 }
 
+/** A freeform to-do block marker; its tasks live in the unified task store. */
 export interface TodoBlock {
   id: string;
   type: "todo";
-  tasks: Task[];
 }
 
 export type Block = NotesBlock | TodoBlock;

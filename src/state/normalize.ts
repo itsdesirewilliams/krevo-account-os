@@ -15,18 +15,9 @@ import {
   type Project,
   type ProjectStatus,
   type Sheet,
-  type Task,
   type Trash,
   type TrashSheetEntry,
 } from "../types";
-
-function normalizeTask(t: Partial<Task>): Task {
-  return {
-    id: t.id || genId(),
-    text: t.text == null ? "" : t.text,
-    completed: !!t.completed,
-  };
-}
 
 function normalizePayment(raw: unknown): Payment {
   const p = (raw && typeof raw === "object" ? raw : {}) as Partial<Payment>;
@@ -60,7 +51,6 @@ function normalizeProject(p: Partial<Project>): Project {
     eventDate: p.eventDate == null ? "" : p.eventDate, // ISO yyyy-mm-dd
     planId: p.planId == null ? null : p.planId,
     deliverables: p.deliverables == null ? null : p.deliverables,
-    tasks: Array.isArray(p.tasks) ? p.tasks.map(normalizeTask) : [],
   };
 }
 
@@ -68,14 +58,11 @@ interface RawBlock {
   id?: string;
   type?: unknown;
   text?: unknown;
-  tasks?: unknown;
 }
 
 function normalizeBlock(b: RawBlock): Block {
   const id = b.id || genId();
-  if (b.type === "todo") {
-    return { id, type: "todo", tasks: Array.isArray(b.tasks) ? (b.tasks as Partial<Task>[]).map(normalizeTask) : [] };
-  }
+  if (b.type === "todo") return { id, type: "todo" };
   return { id, type: "notes", text: typeof b.text === "string" ? b.text : "" };
 }
 
@@ -109,7 +96,7 @@ function normalizeSheet(input: unknown): Sheet {
   const blocks: RawBlock[] = Array.isArray(s.blocks) ? [...(s.blocks as RawBlock[])] : [];
   if (s.notes != null) blocks.push({ id: genId(), type: "notes", text: s.notes as string });
   if (Array.isArray(s.tasks) && s.tasks.length) {
-    blocks.push({ id: genId(), type: "todo", tasks: (s.tasks as Partial<Task>[]).map(normalizeTask) });
+    blocks.push({ id: genId(), type: "todo" });
   }
   return { id, name, blocks: blocks.map(normalizeBlock) };
 }

@@ -13,6 +13,8 @@ import { TeamView } from "./features/team/components/TeamView";
 import { ProspectingView } from "./features/prospecting/components/ProspectingView";
 import { ContentView } from "./features/content/components/ContentView";
 import { FinanceView } from "./features/finance/components/FinanceView";
+import { HomeView } from "./features/home/components/HomeView";
+import { TasksView } from "./features/tasks/components/TasksView";
 
 function EmptyState() {
   const state = useStoreState();
@@ -52,6 +54,10 @@ function MainContent() {
   const { nav } = useNav();
 
   switch (nav.activeSection) {
+    case "home":
+      return <HomeView />;
+    case "tasks":
+      return <TasksView />;
     case "team":
       return <TeamView />;
     case "prospecting":

@@ -11,12 +11,12 @@ must follow the Enforcement Rules at the bottom.
 **Krevo Account OS** is a single-user, internal business-operations app for a social/creative
 agency. It tracks four things:
 
-| Domain | Where it lives today (after Phase 1) |
+| Domain | Where it lives today (after Phase 2) |
 |---|---|
-| **Projects** | Accounts → Overview sheet → projects (name, event, quoted amount, status pipeline, payments, date, plan, tasks) |
-| **Teams** | Team members (persons + tools) with monthly cost, jobs, job tasks, SOP refs |
+| **Projects** | Accounts → Overview sheet → projects (name, event, quoted amount, status pipeline, payments, date, plan) |
+| **Teams** | Team members (persons + tools) with monthly cost, jobs, SOP refs |
 | **Money** | Finance view: booked vs collected revenue from projects/payments, costs from team members, expenses slice |
-| **Tasks** | Still scattered: project tasks, sheet todo-blocks, job tasks (unified in Phase 2) |
+| **Tasks** | Unified `features/tasks` store — assignee, due date, status, priority, links to project/job/sheet; Tasks section + Home dashboard |
 
 Supporting modules: **Prospecting** (sales sprints → prospect pipeline), **Content** (social
 accounts → scheduled posts, linked to projects), **Plans** (hardcoded pricing plans with social
@@ -60,10 +60,12 @@ Phase 4 adds the real desktop shell back.
 
 ```
 src/
-  main.tsx                    Entry; loads accounts state, mounts providers, imports bundled fonts
+  main.tsx                    Entry; loads accounts state + one-time legacy-task migration,
+                              mounts providers, imports bundled fonts
   App.tsx                     Shell: header, StorageBanner, AppNav, MainContent section switcher
-  types.ts                    Core model V4: Account, Sheet (Overview|Custom), Block (union), Project
-                              (status/quotedAmount/payments), Payment, Task, Trash, money helpers
+  types.ts                    Core model V4: Account, Sheet (Overview|Custom), Block (union),
+                              Project (status/quotedAmount/payments), Payment, Trash, money helpers.
+                              Tasks live in features/tasks, not here.
   storage/index.ts            StorageDriver (load/save/flush) + BrowserStorageDriver + onStorageError
   state/
     store.tsx                 StoreProvider with SEPARATE state + actions contexts
@@ -101,6 +103,11 @@ src/
                               MonthPanel · YearPanel · ExpensesPanel · PlansPanel
     plans/                    plans.types · plans.repository (pure, persisted default PLANS A/B,
                               deliverable defaults) · plansState (usePersistentState)
+    tasks/                    tasks.types · tasks.repository (pure: CRUD, cascades, selectors,
+                              legacy extraction) · tasksState (usePersistentState) ·
+                              taskContext (context labels) · components/TasksView
+    home/                     components/HomeView (overdue/today tasks, upcoming events,
+                              month finance snapshot, recent payments)
   test-utils/assert.ts        Test-only `first()` / `present()` narrowing helpers
 tests                         Co-located as src/**/*.test.ts (vitest)
 vitest.config.ts
@@ -198,7 +205,7 @@ finance math, and the storage driver.
   `quotedAmount`; plans are editable in Finance → Plans.
 - **Exit criteria met:** V3→V4 migration tested; all finance rollups unit-tested (66 tests).
 
-### Phase 2 — Unified tasks + dashboards
+### Phase 2 — Unified tasks + dashboards ✅ COMPLETE
 - New `features/tasks/`: pure repository + `usePersistentState` slice.
   ```ts
   interface TaskRecord {
@@ -207,20 +214,27 @@ finance math, and the storage driver.
     priority: "low" | "normal" | "high";
     dueDate: string | null;       // ISO yyyy-mm-dd
     assigneeId: string | null;    // team member id
-    links: { accountId?: string; projectId?: string; jobId?: string; sheetId?: string };
+    links: { accountId?: string; projectId?: string; jobId?: string; sheetId?: string; blockId?: string };
     createdAt: string; completedAt: string | null;
   }
   ```
-- Migration folds project tasks (`links.projectId`), job tasks (`links.jobId` +
-  `assigneeId = job.teamMemberId`), and sheet todo-block tasks (`links.sheetId`) into this store,
-  preserving ids. `completedAt` backfilled from job-task `updatedAt`; project/sheet tasks → null
-  ("undated"). Per-module task UIs become filtered views — one task-row UI.
-- Selectors: `byAssignee`, `completedInRange`, `openByAssignee`, `overdue`, grouped views.
-- ISO-week utilities in `lib/dates.ts` (`startOfIsoWeek`, `addWeeks`, `weekRange`, `weekKey`).
-- UI: Tasks section (filters / group-by / quick-add); Home dashboard (overdue + today's tasks,
-  upcoming events next 14 days, month finance snapshot, recent payments) as the default section.
-- **Exit criteria:** migration + selectors + overdue logic tested; no task list reads from the
-  old locations.
+  (`blockId` scopes tasks to a specific freeform to-do block.)
+- Legacy tasks were migrated once at bootstrap (`extractLegacyTasks` reads raw persisted
+  payloads): project tasks → `links.projectId`; job tasks → `links.jobId` +
+  `assigneeId = job.teamMemberId`; sheet block/V2 sheet tasks → `links.sheetId`/`blockId`.
+  Ids preserved; `completedAt` backfilled from job-task `updatedAt`, project/sheet → null.
+  Embedded task arrays were then removed from the model (`Project.tasks`, `Job.tasks`,
+  `TodoBlock.tasks`) so the unified store is the only source.
+- Selectors: `openTasks`, `overdueTasks`, `tasksDueOn`, `tasksByAssignee`, `tasksByProject`,
+  `tasksByJob`, `tasksByBlock`, `completedInRange`, `sortedTasks`.
+- ISO-week utilities in `lib/dates.ts` (`startOfIsoWeek`, `addDays`, `addWeeks`, `weekRange`,
+  `weekKey`).
+- UI: Tasks section (status/assignee filters, group-by status/assignee/context, quick-add);
+  Home dashboard (overdue + today's tasks, upcoming events next 14 days, month finance
+  snapshot, recent payments) as the default section. Project/job/sheet task lists are filtered
+  views of the one store; deletes/trashes cascade to tasks.
+- **Exit criteria met:** extraction + selectors + overdue/week logic tested; no task list reads
+  from the old locations (84 tests).
 
 ### Phase 3 — Feature depth
 - **Team weekly work + value** (§5): `teamValue.service` + per-member weekly view + team-wide
@@ -302,7 +316,7 @@ and **remove** what violates them.
 
 - [x] Phase 0 — Remediation + test infrastructure
 - [x] Phase 1 — Money (schema V4)
-- [ ] Phase 2 — Unified tasks + dashboards
+- [x] Phase 2 — Unified tasks + dashboards
 - [ ] Phase 3 — Feature depth (incl. Team weekly work + value)
 - [ ] Phase 4 — Tauri desktop shell + SQLite + in-app auto-update
 
@@ -316,3 +330,9 @@ removed pending Phase 4; desktop-only deployment confirmed; weekly work/value re
 migration); persisted Finance expenses/categories + persisted editable Plans; booked vs
 collected revenue, status filter, yearly grid, by-account breakdown; Finance Month/Year/Expenses/
 Plans tabs; payments panel in the project modal. Build green, 66 vitest tests green.
+
+**2026-09-18 — Phase 2 complete.** Unified task store (`features/tasks`) with assignee/due/status/
+priority and project/job/sheet links; one-time raw-payload migration folded every embedded task
+in and the embedded arrays were removed from the model. ISO-week date utilities; Tasks section
+(filters/group-by/quick-add); Home dashboard (default section). Task cascades on project/job/block
+delete and account/sheet purge. Build green, 84 vitest tests green.

@@ -13,7 +13,6 @@ const project = (over: Partial<Project> & { id: string }): Project => ({
   status: "confirmed",
   payments: [],
   eventDate: "",
-  tasks: [],
   ...over,
 });
 

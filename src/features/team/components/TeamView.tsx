@@ -12,6 +12,8 @@ import { formatINR, parseAmount } from "../../../lib/currency";
 import { FeatureEmpty } from "../../../components/ui/FeatureEmpty";
 import { Modal } from "../../../components/modals/Modal";
 import { TaskInput, TaskRow } from "../../../components/ui/TaskRow";
+import { useTasks } from "../../tasks/tasksState";
+import { sortedTasks, tasksByJob } from "../../tasks/tasks.repository";
 
 /* ---------------- Member overview ---------------- */
 
@@ -261,10 +263,13 @@ function EditMemberModal({ member, onClose, onSave, onRemove }: {
 /* ---------------- Job modal (full job view) ---------------- */
 
 function JobModal({ member, jobId, onClose }: { member: TeamMember; jobId: string; onClose: () => void }) {
-  const { editJob, removeJob, attachSop, createTask, toggleTask, editTaskText, removeTask } = useTeam();
+  const { editJob, removeJob, attachSop } = useTeam();
+  const tasks = useTasks();
   const ui = useUI();
   const job = member.jobs.find((j) => j.id === jobId);
   if (!job) return null;
+
+  const list = sortedTasks(tasksByJob(tasks.tasks, jobId));
 
   return (
     <Modal title={job.name || "Job"} width={480} onClose={onClose}>
@@ -321,18 +326,20 @@ function JobModal({ member, jobId, onClose }: { member: TeamMember; jobId: strin
 
       <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-dim mb-2">To-Do</div>
       <div className="flex flex-col">
-        {job.tasks.map((t) => (
+        {list.map((task) => (
           <TaskRow
-            key={t.id}
-            text={t.text}
-            completed={t.completed}
-            onToggle={() => toggleTask(member.id, jobId, t.id)}
-            onCommitText={(v) => editTaskText(member.id, jobId, t.id, v)}
-            onDelete={() => removeTask(member.id, jobId, t.id)}
+            key={task.id}
+            text={task.title}
+            completed={task.status === "done"}
+            onToggle={() => tasks.toggle(task.id)}
+            onCommitText={(v) => tasks.updateTask(task.id, { title: v })}
+            onDelete={() => tasks.removeTask(task.id)}
           />
         ))}
       </div>
-      <TaskInput onAdd={(text) => createTask(member.id, jobId, text)} />
+      <TaskInput
+        onAdd={(text) => tasks.createTask({ title: text, links: { jobId }, assigneeId: member.id })}
+      />
 
       <div className="flex justify-between items-center mt-5">
         <button
@@ -340,6 +347,7 @@ function JobModal({ member, jobId, onClose }: { member: TeamMember; jobId: strin
           onClick={() =>
             ui.confirm(`Delete job "${job.name}"?`, () => {
               removeJob(member.id, jobId);
+              tasks.removeByLinks({ jobId });
               onClose();
             })
           }

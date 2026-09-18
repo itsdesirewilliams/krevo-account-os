@@ -1,9 +1,9 @@
 import type { AccountColorFilter } from "../types";
 
 /** Top-level workspace sections of Krevo OS. */
-export type Section = "accounts" | "team" | "prospecting" | "content" | "finance";
+export type Section = "home" | "accounts" | "tasks" | "team" | "prospecting" | "content" | "finance";
 
-export const SECTIONS: Section[] = ["accounts", "team", "prospecting", "content", "finance"];
+export const SECTIONS: Section[] = ["home", "accounts", "tasks", "team", "prospecting", "content", "finance"];
 
 export interface NavData {
   activeSection: Section;
@@ -17,8 +17,8 @@ export interface NavData {
 }
 
 export const defaultNav = (): NavData => ({
-  activeSection: "accounts",
-  expanded: { accounts: true, team: true, prospecting: true, content: true, finance: true },
+  activeSection: "home",
+  expanded: { home: true, accounts: true, tasks: true, team: true, prospecting: true, content: true, finance: true },
   teamMemberId: null,
   sprintId: null,
   socialAccountId: null,

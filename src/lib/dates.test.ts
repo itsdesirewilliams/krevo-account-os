@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { first } from "../test-utils/assert";
-import { formatDate, todayLocalIso } from "./dates";
+import {
+  addDays,
+  addWeeks,
+  formatDate,
+  parseIsoDate,
+  startOfIsoWeek,
+  todayLocalIso,
+  weekKey,
+  weekRange,
+} from "./dates";
 
 describe("formatDate", () => {
   it("renders an ISO date in long form", () => {
@@ -25,5 +34,37 @@ describe("todayLocalIso", () => {
     const month = Number(parts[1]);
     const day = Number(parts[2]);
     expect(new Date(year, month - 1, day).getTime()).toBe(expected.getTime());
+  });
+});
+
+describe("ISO calendar helpers", () => {
+  it("parses and rejects ISO dates", () => {
+    expect(parseIsoDate("2026-10-29")).not.toBeNull();
+    expect(parseIsoDate("not-a-date")).toBeNull();
+    expect(parseIsoDate("2026-13-01")).not.toBeNull(); // rolls over, still a Date
+    expect(parseIsoDate("")).toBeNull();
+  });
+
+  it("finds the Monday of the ISO week", () => {
+    // 2026-10-29 is a Thursday; its week starts Monday 2026-10-26.
+    expect(startOfIsoWeek("2026-10-29")).toBe("2026-10-26");
+    expect(startOfIsoWeek("2026-10-26")).toBe("2026-10-26"); // Monday itself
+    expect(startOfIsoWeek("2026-11-01")).toBe("2026-10-26"); // Sunday belongs to the prior Monday's week
+  });
+
+  it("adds days and weeks", () => {
+    expect(addDays("2026-10-29", 3)).toBe("2026-11-01");
+    expect(addDays("2026-10-29", -1)).toBe("2026-10-28");
+    expect(addWeeks("2026-10-26", 2)).toBe("2026-11-09");
+  });
+
+  it("returns Monday-Sunday week ranges", () => {
+    expect(weekRange("2026-10-29")).toEqual({ start: "2026-10-26", end: "2026-11-01" });
+  });
+
+  it("builds ISO week keys", () => {
+    expect(weekKey("2026-10-29")).toBe("2026-W44");
+    expect(weekKey("2026-01-01")).toBe("2026-W01");
+    expect(weekKey("bad")).toBe("");
   });
 });

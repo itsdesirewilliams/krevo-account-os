@@ -51,7 +51,6 @@ describe("normalize - legacy migration", () => {
     const project = first(present(overviewOf(account)).projects);
     expect(project.projectName).toBe("Summer Gala");
     expect(project.eventDate).toBe("2026-10-29");
-    expect(first(project.tasks).completed).toBe(true);
   });
 
   it("migrates V3 charges to a structured quoted amount (V4)", () => {
@@ -62,15 +61,13 @@ describe("normalize - legacy migration", () => {
     expect(project.payments).toEqual([]);
   });
 
-  it("turns a notes+tasks sheet into two blocks", () => {
+  it("turns a notes+tasks sheet into a notes block and a todo marker", () => {
     const sheet = present(account.sheets[1]);
     if (isOverview(sheet)) throw new Error("expected a custom sheet");
     const notes = first(sheet.blocks);
     const todo = first(sheet.blocks.slice(1));
     expect(notes).toMatchObject({ type: "notes", text: "Client information" });
-    expect(todo.type).toBe("todo");
-    if (todo.type !== "todo") throw new Error("expected a todo block");
-    expect(first(todo.tasks).text).toBe("Create poster");
+    expect(todo).toEqual({ id: expect.any(String), type: "todo" });
   });
 
   it("drops stale tab and sheet-state references", () => {

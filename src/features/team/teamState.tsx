@@ -1,23 +1,20 @@
 /*
  * Team feature state: persists through the shared persistence helper and
- * exposes repo operations as actions. Members, jobs, SOPs and tasks all live
- * in this slice; Finance derives costs from it.
+ * exposes repo operations as actions. Members, jobs and SOPs live in this
+ * slice; their tasks live in the unified task store, and Finance derives
+ * costs from here.
  */
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 import { usePersistentState } from "../../state/persist";
 import {
   TEAM_KEY,
   addJob,
-  addJobTask,
   addMember,
   defaultTeamData,
   deleteJob,
-  deleteJobTask,
   deleteMember,
   normalizeTeamData,
   setJobSop,
-  setJobTaskText,
-  toggleJobTask,
   updateJob,
   updateMember,
 } from "./team.repository";
@@ -41,10 +38,6 @@ interface TeamStore {
   editJob: (memberId: string, jobId: string, patch: Partial<Pick<Job, "name" | "description" | "category" | "active">>) => void;
   removeJob: (memberId: string, jobId: string) => void;
   attachSop: (memberId: string, jobId: string, sop: SopRef | null) => void;
-  createTask: (memberId: string, jobId: string, text: string) => void;
-  toggleTask: (memberId: string, jobId: string, taskId: string) => void;
-  editTaskText: (memberId: string, jobId: string, taskId: string, text: string) => void;
-  removeTask: (memberId: string, jobId: string, taskId: string) => void;
 }
 
 const TeamContext = createContext<TeamStore | null>(null);
@@ -68,10 +61,6 @@ export function TeamProvider({ children }: { children: ReactNode }) {
       editJob: (memberId, jobId, patch) => setData((d) => updateJob(d, memberId, jobId, patch)),
       removeJob: (memberId, jobId) => setData((d) => deleteJob(d, memberId, jobId)),
       attachSop: (memberId, jobId, sop) => setData((d) => setJobSop(d, memberId, jobId, sop)),
-      createTask: (memberId, jobId, text) => setData((d) => addJobTask(d, memberId, jobId, text)),
-      toggleTask: (memberId, jobId, taskId) => setData((d) => toggleJobTask(d, memberId, jobId, taskId)),
-      editTaskText: (memberId, jobId, taskId, text) => setData((d) => setJobTaskText(d, memberId, jobId, taskId, text)),
-      removeTask: (memberId, jobId, taskId) => setData((d) => deleteJobTask(d, memberId, jobId, taskId)),
     }),
     [data, setData],
   );

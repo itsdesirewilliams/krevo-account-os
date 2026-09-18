@@ -1,16 +1,6 @@
 /** A Person or Tool (recurring-cost entity) that performs work for Krevo. */
 export type MemberType = "person" | "tool";
 
-/** A task inside a Job. Jobs own tasks; team members do not hold tasks directly. */
-export interface JobTask {
-  id: string;
-  jobId: string;
-  text: string;
-  completed: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
 /**
  * Metadata describing an attached SOP file. The actual bytes live separately
  * (browser: through the storage driver; desktop: app-data files/sops/<job-id>),
@@ -36,7 +26,6 @@ export interface Job {
   category: string;
   active: boolean;
   sop: SopRef | null;
-  tasks: JobTask[];
   createdAt: string;
   updatedAt: string;
 }

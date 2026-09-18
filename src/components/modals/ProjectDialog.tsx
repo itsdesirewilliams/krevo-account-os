@@ -18,6 +18,8 @@ import { CheckIcon, CloseIcon } from "../Icons";
 import { TaskInput, TaskRow } from "../ui/TaskRow";
 import { defaultDeliverables, findPlan, planLabel } from "../../features/plans/plans.repository";
 import { usePlans } from "../../features/plans/plansState";
+import { useTasks } from "../../features/tasks/tasksState";
+import { sortedTasks, tasksByProject } from "../../features/tasks/tasks.repository";
 import type { DeliverableId } from "../../features/plans/plans.types";
 
 /* ---------------- Payments ---------------- */
@@ -109,31 +111,24 @@ function PaymentsPanel({
 
 /* ---------------- Project tasks ---------------- */
 
-function ProjectTasks({
-  accountId,
-  projectId,
-  tasks,
-}: {
-  accountId: string;
-  projectId: string;
-  tasks: { id: string; text: string; completed: boolean }[];
-}) {
-  const store = useStoreActions();
+function ProjectTasks({ accountId, projectId }: { accountId: string; projectId: string }) {
+  const tasks = useTasks();
+  const list = sortedTasks(tasksByProject(tasks.tasks, projectId));
   return (
     <div>
       <div className="flex flex-col">
-        {tasks.map((t) => (
+        {list.map((task) => (
           <TaskRow
-            key={t.id}
-            text={t.text}
-            completed={t.completed}
-            onToggle={() => store.toggleProjectTask(accountId, projectId, t.id)}
-            onCommitText={(v) => store.setProjectTaskText(accountId, projectId, t.id, v)}
-            onDelete={() => store.deleteProjectTask(accountId, projectId, t.id)}
+            key={task.id}
+            text={task.title}
+            completed={task.status === "done"}
+            onToggle={() => tasks.toggle(task.id)}
+            onCommitText={(v) => tasks.updateTask(task.id, { title: v })}
+            onDelete={() => tasks.removeTask(task.id)}
           />
         ))}
       </div>
-      <TaskInput onAdd={(text) => store.addProjectTask(accountId, projectId, text)} />
+      <TaskInput onAdd={(text) => tasks.createTask({ title: text, links: { accountId, projectId } })} />
     </div>
   );
 }
@@ -144,6 +139,7 @@ export function ProjectDialog({ accountId, projectId }: { accountId: string; pro
   const state = useStoreState();
   const store = useStoreActions();
   const { plans } = usePlans();
+  const tasks = useTasks();
   const ui = useUI();
 
   const account = state.accounts.find((a) => a.id === accountId);
@@ -281,7 +277,7 @@ export function ProjectDialog({ accountId, projectId }: { accountId: string; pro
       <div className="border-t hairline my-3" />
 
       <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-dim mb-2">To-Do</div>
-      <ProjectTasks accountId={accountId} projectId={projectId} tasks={project.tasks} />
+      <ProjectTasks accountId={accountId} projectId={projectId} />
 
       <div className="flex justify-between items-center mt-5">
         <button
@@ -289,6 +285,7 @@ export function ProjectDialog({ accountId, projectId }: { accountId: string; pro
           onClick={() =>
             ui.confirm("Delete this project?", () => {
               store.deleteProject(accountId, projectId);
+              tasks.removeByLinks({ projectId });
               ui.closeDialog();
             })
           }

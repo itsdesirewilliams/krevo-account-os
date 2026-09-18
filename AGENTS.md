@@ -11,11 +11,11 @@ must follow the Enforcement Rules at the bottom.
 **Krevo Account OS** is a single-user, internal business-operations app for a social/creative
 agency. It tracks four things:
 
-| Domain | Where it lives today (after Phase 0) |
+| Domain | Where it lives today (after Phase 1) |
 |---|---|
-| **Projects** | Accounts → Overview sheet → projects (name, event, charges, date, plan, tasks) |
+| **Projects** | Accounts → Overview sheet → projects (name, event, quoted amount, status pipeline, payments, date, plan, tasks) |
 | **Teams** | Team members (persons + tools) with monthly cost, jobs, job tasks, SOP refs |
-| **Money** | Finance view deriving revenue from project charges and costs from team members |
+| **Money** | Finance view: booked vs collected revenue from projects/payments, costs from team members, expenses slice |
 | **Tasks** | Still scattered: project tasks, sheet todo-blocks, job tasks (unified in Phase 2) |
 
 Supporting modules: **Prospecting** (sales sprints → prospect pipeline), **Content** (social
@@ -62,7 +62,8 @@ Phase 4 adds the real desktop shell back.
 src/
   main.tsx                    Entry; loads accounts state, mounts providers, imports bundled fonts
   App.tsx                     Shell: header, StorageBanner, AppNav, MainContent section switcher
-  types.ts                    Core model V3: Account, Sheet (Overview|Custom), Block (union), Project, Task, Trash
+  types.ts                    Core model V4: Account, Sheet (Overview|Custom), Block (union), Project
+                              (status/quotedAmount/payments), Payment, Task, Trash, money helpers
   storage/index.ts            StorageDriver (load/save/flush) + BrowserStorageDriver + onStorageError
   state/
     store.tsx                 StoreProvider with SEPARATE state + actions contexts
@@ -85,7 +86,8 @@ src/
     Workspace · SheetBar · AccountTabs · OverviewSheet · CustomSheet · TrashView · ContextMenu
     Icons · StorageBanner
     ui/FeatureEmpty · ui/TaskRow (TaskRow + TaskInput, shared everywhere)
-    modals/Modal (single modal impl) · modals/ModalHost (global dialogs)
+    modals/Modal (single modal impl) · modals/ModalHost (generic dialogs)
+      modals/ProjectDialog (money + status + tasks) · modals/NewProjectDialog
   features/
     team/                     team.types · team.repository (pure, immutable, deep-normalizing)
                               teamState (usePersistentState) · components/TeamView
@@ -93,8 +95,12 @@ src/
                               prospectingState (usePersistentState) · components/ProspectingView
     content/                  content.types · content.repository (pure, immutable)
                               contentState (usePersistentState) · components/ContentView
-    finance/                  finance.service (pure derivation, owns NO data yet) · components/FinanceView
-    plans/                    plans.ts — PLANS hardcoded; getPlan, planLabel, defaultDeliverables
+    finance/                  finance.types · finance.repository (pure: expenses + categories)
+                              financeState (usePersistentState) · finance.service (pure derivation:
+                              booked/collected/expenses/year) · components/FinanceView +
+                              MonthPanel · YearPanel · ExpensesPanel · PlansPanel
+    plans/                    plans.types · plans.repository (pure, persisted default PLANS A/B,
+                              deliverable defaults) · plansState (usePersistentState)
   test-utils/assert.ts        Test-only `first()` / `present()` narrowing helpers
 tests                         Co-located as src/**/*.test.ts (vitest)
 vitest.config.ts
@@ -177,18 +183,20 @@ Each phase ends with working software and green tests.
 See §4. Test harness replaced with vitest; 44 tests across parsers, normalizers, repositories,
 finance math, and the storage driver.
 
-### Phase 1 — Money (schema V4)
+### Phase 1 — Money (schema V4) ✅ COMPLETE
 - `Project` gains `status` (pipeline), `quotedAmount: number` (migrated from `charges` via
   `parseAmount`; `charges` kept read-only for display), `payments: Payment[]`
-  (`{ id, amount, date, note? }`); derived `paid`, `balance`, collection status.
-- Finance gains its own persisted slice: `expenses: Expense[]`
+  (`{ id, amount, date, note? }`); derived `paid`, `balance`, collection status in `types.ts`.
+- Finance owns a persisted slice: `expenses: Expense[]`
   (`{ id, date, label, category, amount, recurringMonthly? }`) with editable categories.
 - `finance.service.ts`: booked (event-month) vs collected (payment-date) revenue; status filter
-  (exclude `lead`/`cancelled`/`on_hold` by default, toggleable); yearly 12-month grid;
-  per-account profitability; expenses series.
-- UI: payments panel in project modal; status chips + filters; expenses entry; Year view tab.
-- `plans.ts`: PLANS become persisted, editable records; plan price seeds `quotedAmount`.
-- **Exit criteria:** V3→V4 migration tested; all finance rollups unit-tested.
+  (excludes `lead`/`cancelled`/`on_hold` by default, toggleable); yearly 12-month grid;
+  per-account breakdown; expenses series; net.
+- UI: payments panel + status chips in the project modal; quoted amount; status chips on
+  Overview; Finance tabs Month / Year / Expenses / Plans.
+- `plans/` is now a full feature slice (types + pure repository + state); plan price seeds
+  `quotedAmount`; plans are editable in Finance → Plans.
+- **Exit criteria met:** V3→V4 migration tested; all finance rollups unit-tested (66 tests).
 
 ### Phase 2 — Unified tasks + dashboards
 - New `features/tasks/`: pure repository + `usePersistentState` slice.
@@ -293,7 +301,7 @@ and **remove** what violates them.
 ## 9. Current status
 
 - [x] Phase 0 — Remediation + test infrastructure
-- [ ] Phase 1 — Money (schema V4)
+- [x] Phase 1 — Money (schema V4)
 - [ ] Phase 2 — Unified tasks + dashboards
 - [ ] Phase 3 — Feature depth (incl. Team weekly work + value)
 - [ ] Phase 4 — Tauri desktop shell + SQLite + in-app auto-update
@@ -303,3 +311,8 @@ and **remove** what violates them.
 **2026-09-18 — Phase 0 complete.** Build green, 44 vitest tests green. Tauri deps/driver
 removed pending Phase 4; desktop-only deployment confirmed; weekly work/value requirement locked
 (§5); updater security model locked (§7).
+
+**2026-09-18 — Phase 1 complete.** Schema V4 (project status/quotedAmount/payments, V3→V4
+migration); persisted Finance expenses/categories + persisted editable Plans; booked vs
+collected revenue, status filter, yearly grid, by-account breakdown; Finance Month/Year/Expenses/
+Plans tabs; payments panel in the project modal. Build green, 66 vitest tests green.

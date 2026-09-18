@@ -54,6 +54,14 @@ describe("normalize - legacy migration", () => {
     expect(first(project.tasks).completed).toBe(true);
   });
 
+  it("migrates V3 charges to a structured quoted amount (V4)", () => {
+    const project = first(present(overviewOf(account)).projects);
+    expect(project.charges).toBe("25000");
+    expect(project.quotedAmount).toBe(25000);
+    expect(project.status).toBe("confirmed");
+    expect(project.payments).toEqual([]);
+  });
+
   it("turns a notes+tasks sheet into two blocks", () => {
     const sheet = present(account.sheets[1]);
     if (isOverview(sheet)) throw new Error("expected a custom sheet");
@@ -78,8 +86,57 @@ describe("normalize - baseline", () => {
   });
 });
 
-describe("normalize - invariants", () => {
-  it("gives every account an Overview sheet", () => {
+describe("normalize - V4 projects", () => {
+  it("keeps valid statuses, payments and quoted amounts", () => {
+    const st = normalize({
+      accounts: [
+        {
+          id: "a1",
+          name: "A",
+          sheets: [
+            {
+              id: "ov",
+              name: "Overview",
+              projects: [
+                {
+                  id: "p1",
+                  projectName: "Gala",
+                  charges: "25,000",
+                  quotedAmount: 31000,
+                  status: "delivered",
+                  payments: [{ id: "pay1", amount: 10000, date: "2026-10-01", note: "Advance" }],
+                  eventDate: "2026-10-29",
+                  tasks: [],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    const project = first(present(overviewOf(first(st.accounts))).projects);
+    expect(project.status).toBe("delivered");
+    expect(project.quotedAmount).toBe(31000);
+    expect(first(project.payments)).toMatchObject({ amount: 10000, note: "Advance" });
+  });
+
+  it("falls back to confirmed for unknown statuses", () => {
+    const st = normalize({
+      accounts: [
+        {
+          id: "a1",
+          name: "A",
+          sheets: [{ id: "ov", name: "Overview", projects: [{ id: "p1", status: "bogus", charges: "5,000" }] }],
+        },
+      ],
+    });
+    const project = first(present(overviewOf(first(st.accounts))).projects);
+    expect(project.status).toBe("confirmed");
+    expect(project.quotedAmount).toBe(5000);
+  });
+});
+
+describe("normalize - invariants", () => {  it("gives every account an Overview sheet", () => {
     const st = normalize({
       accounts: [{ id: "a1", name: "No Overview", sheets: [{ id: "s1", name: "Notes", blocks: [] }] }],
     });

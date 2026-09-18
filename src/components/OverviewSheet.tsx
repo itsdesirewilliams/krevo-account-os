@@ -1,7 +1,7 @@
 import { useUI } from "../state/ui";
-import { overviewOf, type Account } from "../types";
+import { overviewOf, PROJECT_STATUS_LABELS, type Account } from "../types";
 import { formatDate } from "../lib/dates";
-import { formatCharges } from "../lib/currency";
+import { formatCharges, formatINR } from "../lib/currency";
 
 export function OverviewSheet({ account }: { account: Account }) {
   const ui = useUI();
@@ -19,14 +19,14 @@ export function OverviewSheet({ account }: { account: Account }) {
       ) : (
         <div className="flex flex-col gap-3 mt-3">
           {overview.projects.map((p) => {
-            const meta = [
-              p.eventName,
-              p.charges ? formatCharges(p.charges) : "",
-              p.eventDate ? formatDate(p.eventDate) : "",
-            ].filter(Boolean).join("  ·  ");
+            const amount = p.quotedAmount > 0 ? formatINR(p.quotedAmount) : p.charges ? formatCharges(p.charges) : "";
+            const meta = [p.eventName, amount, p.eventDate ? formatDate(p.eventDate) : ""].filter(Boolean).join("  ·  ");
             return (
               <div key={p.id} className="project-card" onClick={() => ui.openProject(account.id, p.id)}>
-                <div className="project-card-title">{p.projectName || "Untitled Project"}</div>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="project-card-title">{p.projectName || "Untitled Project"}</div>
+                  <span className={"status-chip status-" + p.status}>{PROJECT_STATUS_LABELS[p.status]}</span>
+                </div>
                 {meta && <div className="project-card-meta">{meta}</div>}
               </div>
             );
@@ -42,4 +42,3 @@ export function OverviewSheet({ account }: { account: Account }) {
     </div>
   );
 }
-

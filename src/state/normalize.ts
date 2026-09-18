@@ -4,7 +4,21 @@
  * legacy (V2) custom sheets that carried notes/tasks directly on the sheet.
  */
 import { genId } from "../lib/id";
-import { isOverview, type Account, type AppState, type Block, type Project, type Sheet, type Task, type Trash, type TrashSheetEntry } from "../types";
+import { parseAmount } from "../lib/currency";
+import {
+  isOverview,
+  PROJECT_STATUSES,
+  type Account,
+  type AppState,
+  type Block,
+  type Payment,
+  type Project,
+  type ProjectStatus,
+  type Sheet,
+  type Task,
+  type Trash,
+  type TrashSheetEntry,
+} from "../types";
 
 function normalizeTask(t: Partial<Task>): Task {
   return {
@@ -14,12 +28,35 @@ function normalizeTask(t: Partial<Task>): Task {
   };
 }
 
+function normalizePayment(raw: unknown): Payment {
+  const p = (raw && typeof raw === "object" ? raw : {}) as Partial<Payment>;
+  const payment: Payment = {
+    id: p.id || genId(),
+    amount: typeof p.amount === "number" && Number.isFinite(p.amount) ? p.amount : 0,
+    date: p.date == null ? "" : p.date,
+  };
+  if (p.note != null) payment.note = p.note;
+  return payment;
+}
+
+function normalizeProjectStatus(value: unknown): ProjectStatus {
+  return PROJECT_STATUSES.find((s) => s === value) ?? "confirmed";
+}
+
 function normalizeProject(p: Partial<Project>): Project {
+  const charges = p.charges == null ? "" : p.charges;
+  // V3 stored a free-text charges string; V4 keeps it for display but derives
+  // the structured quotedAmount once.
+  const quotedAmount =
+    typeof p.quotedAmount === "number" && Number.isFinite(p.quotedAmount) ? p.quotedAmount : parseAmount(charges);
   return {
     id: p.id || genId(),
     projectName: p.projectName == null ? p.eventName || "" : p.projectName,
     eventName: p.eventName == null ? "" : p.eventName,
-    charges: p.charges == null ? "" : p.charges,
+    charges,
+    quotedAmount,
+    status: normalizeProjectStatus(p.status),
+    payments: Array.isArray(p.payments) ? p.payments.map(normalizePayment) : [],
     eventDate: p.eventDate == null ? "" : p.eventDate, // ISO yyyy-mm-dd
     planId: p.planId == null ? null : p.planId,
     deliverables: p.deliverables == null ? null : p.deliverables,

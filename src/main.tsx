@@ -14,6 +14,8 @@ import { STORAGE_KEY, storage } from "./storage";
 import { TeamProvider } from "./features/team/teamState";
 import { ProspectingProvider } from "./features/prospecting/prospectingState";
 import { ContentProvider } from "./features/content/contentState";
+import { FinanceProvider } from "./features/finance/financeState";
+import { PlansProvider } from "./features/plans/plansState";
 import type { AppState } from "./types";
 
 async function loadInitialState(): Promise<{ state: AppState; loaded: boolean }> {
@@ -41,7 +43,11 @@ async function bootstrap() {
             <TeamProvider>
               <ProspectingProvider>
                 <ContentProvider>
-                  <App />
+                  <FinanceProvider>
+                    <PlansProvider>
+                      <App />
+                    </PlansProvider>
+                  </FinanceProvider>
                 </ContentProvider>
               </ProspectingProvider>
             </TeamProvider>

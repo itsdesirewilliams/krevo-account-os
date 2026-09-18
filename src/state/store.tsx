@@ -17,7 +17,17 @@ import {
 } from "react";
 import { genId } from "../lib/id";
 import { isOverview, overviewOf } from "../types";
-import type { Account, AccountColor, AppState, Block, Project, Sheet, Task } from "../types";
+import type {
+  Account,
+  AccountColor,
+  AppState,
+  Block,
+  Payment,
+  Project,
+  ProjectStatus,
+  Sheet,
+  Task,
+} from "../types";
 import { normalize } from "./normalize";
 import { useFlushOnExit } from "./persist";
 import { STORAGE_KEY, storage } from "../storage";
@@ -43,13 +53,23 @@ export interface StoreActions {
   toggleBlockTask: (accountId: string, sheetId: string, blockId: string, taskId: string) => void;
   deleteBlockTask: (accountId: string, sheetId: string, blockId: string, taskId: string) => void;
   setBlockTaskText: (accountId: string, sheetId: string, blockId: string, taskId: string, text: string) => void;
-  createProject: (accountId: string, data: Omit<Project, "id" | "tasks">) => void;
+  createProject: (accountId: string, data: Omit<Project, "id" | "tasks" | "payments">) => void;
   setProjectField: (
     accountId: string,
     projectId: string,
-    field: "projectName" | "eventName" | "charges" | "eventDate",
+    field: "projectName" | "eventName" | "eventDate",
     value: string,
   ) => void;
+  setProjectQuotedAmount: (accountId: string, projectId: string, amount: number) => void;
+  setProjectStatus: (accountId: string, projectId: string, status: ProjectStatus) => void;
+  addPayment: (accountId: string, projectId: string, input: { amount: number; date: string; note?: string }) => void;
+  updatePayment: (
+    accountId: string,
+    projectId: string,
+    paymentId: string,
+    patch: Partial<Omit<Payment, "id">>,
+  ) => void;
+  deletePayment: (accountId: string, projectId: string, paymentId: string) => void;
   setProjectPlan: (accountId: string, projectId: string, planId: string | null) => void;
   toggleProjectDeliverable: (accountId: string, projectId: string, deliverableId: "collab-repost" | "promo-flyer") => void;
   deleteProject: (accountId: string, projectId: string) => void;
@@ -103,6 +123,12 @@ export function StoreProvider({ initialState, children }: { initialState: AppSta
     const withSheet = (s: AppState, accountId: string, sheetId: string): Sheet | undefined => {
       const a = withAccount(s, accountId);
       return a ? a.sheets.find((x) => x.id === sheetId) : undefined;
+    };
+
+    const withProject = (s: AppState, accountId: string, projectId: string): Project | undefined => {
+      const a = withAccount(s, accountId);
+      const overview = a ? overviewOf(a) : null;
+      return overview ? overview.projects.find((x) => x.id === projectId) : undefined;
     };
 
     return {
@@ -288,36 +314,80 @@ export function StoreProvider({ initialState, children }: { initialState: AppSta
             projectName: (data.projectName || "").trim(),
             eventName: (data.eventName || "").trim(),
             charges: (data.charges || "").trim(),
+            quotedAmount: data.quotedAmount,
+            status: data.status,
+            payments: [],
             eventDate: data.eventDate || "",
+            planId: data.planId ?? null,
+            deliverables: data.deliverables ?? null,
             tasks: [],
           });
         });
       },
       setProjectField(accountId, projectId, field, value) {
         update((s) => {
-          const a = withAccount(s, accountId);
-          const overview = a ? overviewOf(a) : null;
-          const p = overview ? overview.projects.find((x) => x.id === projectId) : undefined;
+          const p = withProject(s, accountId, projectId);
           if (!p) return;
           if (field === "projectName") p.projectName = value;
           else if (field === "eventName") p.eventName = value;
-          else if (field === "charges") p.charges = value;
           else p.eventDate = value;
+        });
+      },
+      setProjectQuotedAmount(accountId, projectId, amount) {
+        update((s) => {
+          const p = withProject(s, accountId, projectId);
+          if (p) p.quotedAmount = Number.isFinite(amount) ? Math.max(0, amount) : 0;
+        });
+      },
+      setProjectStatus(accountId, projectId, status) {
+        update((s) => {
+          const p = withProject(s, accountId, projectId);
+          if (p) p.status = status;
+        });
+      },
+      addPayment(accountId, projectId, input) {
+        update((s) => {
+          const p = withProject(s, accountId, projectId);
+          if (!p) return;
+          const payment: Payment = {
+            id: genId(),
+            amount: Number.isFinite(input.amount) ? Math.max(0, input.amount) : 0,
+            date: input.date || "",
+          };
+          if (input.note != null && input.note.trim() !== "") payment.note = input.note.trim();
+          p.payments.push(payment);
+        });
+      },
+      updatePayment(accountId, projectId, paymentId, patch) {
+        update((s) => {
+          const p = withProject(s, accountId, projectId);
+          if (!p) return;
+          const payment = p.payments.find((x) => x.id === paymentId);
+          if (!payment) return;
+          if (patch.amount !== undefined) payment.amount = Number.isFinite(patch.amount) ? Math.max(0, patch.amount) : 0;
+          if (patch.date !== undefined) payment.date = patch.date;
+          if (patch.note !== undefined) {
+            const note = patch.note.trim();
+            if (note === "") delete payment.note;
+            else payment.note = note;
+          }
+        });
+      },
+      deletePayment(accountId, projectId, paymentId) {
+        update((s) => {
+          const p = withProject(s, accountId, projectId);
+          if (p) p.payments = p.payments.filter((x) => x.id !== paymentId);
         });
       },
       setProjectPlan(accountId, projectId, planId) {
         update((s) => {
-          const a = withAccount(s, accountId);
-          const overview = a ? overviewOf(a) : null;
-          const p = overview ? overview.projects.find((x) => x.id === projectId) : undefined;
+          const p = withProject(s, accountId, projectId);
           if (p) p.planId = planId;
         });
       },
       toggleProjectDeliverable(accountId, projectId, deliverableId) {
         update((s) => {
-          const a = withAccount(s, accountId);
-          const overview = a ? overviewOf(a) : null;
-          const p = overview ? overview.projects.find((x) => x.id === projectId) : undefined;
+          const p = withProject(s, accountId, projectId);
           if (!p) return;
           const current = p.deliverables ?? {};
           p.deliverables = { ...current, [deliverableId]: !current[deliverableId] };

@@ -254,6 +254,22 @@ html, body, #root {
 .status-chip.status-interested { color: #50e3a4; border-color: #1c6e4d; background: rgba(80, 227, 164, 0.1); }
 .status-chip.status-not-interested { color: #ff6b6b; border-color: #6e1c1c; background: rgba(255, 107, 107, 0.1); }
 
+/* ---- Project status + collection chips ---- */
+.status-chip.status-lead { color: #c6a0ff; border-color: #5b3d8a; background: rgba(168, 120, 255, 0.1); }
+.status-chip.status-confirmed { color: #56b3ff; border-color: #274c8a; background: rgba(86, 179, 255, 0.1); }
+.status-chip.status-delivered { color: #50e3a4; border-color: #1c6e4d; background: rgba(80, 227, 164, 0.1); }
+.status-chip.status-on_hold { color: #f2c94c; border-color: #7a6320; background: rgba(242, 201, 76, 0.1); }
+.status-chip.status-cancelled { color: #ff6b6b; border-color: #6e1c1c; background: rgba(255, 107, 107, 0.1); }
+
+.collection-chip {
+  font-size: 10px; font-weight: 600; padding: 1px 8px; border-radius: 999px;
+  border: 1px solid #263241; white-space: nowrap; color: #98a3b3;
+}
+.collection-chip.collection-unpaid { color: #ff6b6b; border-color: #6e1c1c; }
+.collection-chip.collection-partial { color: #f2c94c; border-color: #7a6320; }
+.collection-chip.collection-paid { color: #50e3a4; border-color: #1c6e4d; }
+.collection-chip.collection-overpaid { color: #c6a0ff; border-color: #5b3d8a; }
+
 /* ---- Finance ---- */
 .finance-card {
   flex: 1; background: #151a21; border: 1px solid #263241; border-radius: 10px; padding: 14px 18px;

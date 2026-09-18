@@ -19,7 +19,6 @@
     "fs:allow-appdata-write-recursive",
     "fs:allow-appdata-meta-recursive",
     "process:default",
-    "process:allow-relaunch",
     "updater:default"
   ]
 }

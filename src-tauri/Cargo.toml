@@ -1,6 +1,6 @@
 [package]
 name = "krevo-account-os"
-version = "2.0.1"
+version = "2.0.2"
 description = "Krevo Account OS - internal account operations desktop app"
 authors = ["Krevo"]
 edition = "2021"

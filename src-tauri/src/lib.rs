@@ -45,21 +45,30 @@ fn metadata(update: &Update) -> UpdateMetadata {
     }
 }
 
-/// Check the configured manifest for an update, honoring an optional public-key
-/// override (key rotation). Endpoints/pubkey are runtime-configurable because
-/// the JS plugin API cannot set them.
+/// Check for an update.
+///
+/// `endpoint` is an optional user override. When it is absent or blank the
+/// updater uses the endpoints configured in `tauri.conf.json`
+/// (`plugins.updater.endpoints`) - the single authoritative definition - so a
+/// production install never needs the URL typed in. `pubkey` is an optional
+/// key-rotation override; otherwise the baked fallback public key is used.
 #[tauri::command]
 async fn check_for_update(
     app: AppHandle,
-    endpoint: String,
+    endpoint: Option<String>,
     pubkey: Option<String>,
     pending: State<'_, PendingUpdate>,
 ) -> Result<Option<UpdateMetadata>, String> {
-    let url = url::Url::parse(&endpoint).map_err(|error| error.to_string())?;
-    let mut builder = app
-        .updater_builder()
-        .endpoints(vec![url])
-        .map_err(|error| error.to_string())?;
+    let mut builder = app.updater_builder();
+
+    if let Some(value) = endpoint {
+        let trimmed = value.trim();
+        if !trimmed.is_empty() {
+            let url = url::Url::parse(trimmed).map_err(|error| error.to_string())?;
+            builder = builder.endpoints(vec![url]).map_err(|error| error.to_string())?;
+        }
+    }
+
     if let Some(key) = pubkey {
         let trimmed = key.trim();
         if !trimmed.is_empty() {

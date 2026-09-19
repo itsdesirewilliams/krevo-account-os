@@ -1,7 +1,10 @@
 /*
  * Updater façade. The stock JS plugin API cannot set endpoints/keys at runtime,
- * so we call custom Rust commands (see src-tauri/src/lib.rs) that build the
- * updater with the configured manifest URL and public-key override.
+ * so we call custom Rust commands (see src-tauri/src/lib.rs).
+ *
+ * The manifest URL in Settings is an OPTIONAL override: when it is blank the
+ * Rust command falls back to the endpoints baked into tauri.conf.json
+ * (`plugins.updater.endpoints`), which is the single authoritative definition.
  *
  * The private signing key never exists here: updates are verified against the
  * baked fallback public key, or the user-entered override for key rotation.
@@ -36,9 +39,19 @@ export async function currentVersion(): Promise<string> {
   return getVersion();
 }
 
+/**
+ * Resolve the optional manifest-URL override from Settings.
+ * Blank/whitespace means "use the built-in endpoint", so it resolves to null and
+ * the Rust command keeps the endpoints baked into tauri.conf.json.
+ */
+export function resolveEndpointOverride(raw: string | null | undefined): string | null {
+  const trimmed = (raw ?? "").trim();
+  return trimmed === "" ? null : trimmed;
+}
+
 export async function checkForUpdate(manifestUrl: string, publicKeyOverride: string): Promise<UpdateInfo | null> {
   return invoke<UpdateInfo | null>("check_for_update", {
-    endpoint: manifestUrl,
+    endpoint: resolveEndpointOverride(manifestUrl),
     pubkey: publicKeyOverride.trim() === "" ? null : publicKeyOverride.trim(),
   });
 }

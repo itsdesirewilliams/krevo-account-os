@@ -32,10 +32,7 @@ export function SettingsView() {
       setState({ kind: "error", message: "Auto-updates run in the installed desktop app." });
       return;
     }
-    if (!settings.manifestUrl.trim()) {
-      setState({ kind: "error", message: "Set the update manifest URL first." });
-      return;
-    }
+    // A blank manifest URL is valid: the app falls back to its built-in endpoint.
     setState({ kind: "checking" });
     try {
       const info = await checkForUpdate(settings.manifestUrl, settings.publicKeyOverride);
@@ -65,7 +62,7 @@ export function SettingsView() {
 
   useEffect(() => {
     if (supported) void currentVersion().then(setVersion);
-    if (supported && settings.autoUpdate && settings.checkOnLaunch && settings.manifestUrl.trim()) {
+    if (supported && settings.autoUpdate && settings.checkOnLaunch) {
       void runCheck();
     }
     // Runs once on mount.
@@ -73,11 +70,11 @@ export function SettingsView() {
   }, []);
 
   useEffect(() => {
-    if (!supported || !settings.autoUpdate || settings.checkIntervalMinutes <= 0 || !settings.manifestUrl.trim()) return;
+    if (!supported || !settings.autoUpdate || settings.checkIntervalMinutes <= 0) return;
     const timer = window.setInterval(() => void runCheck(), settings.checkIntervalMinutes * 60_000);
     return () => window.clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supported, settings.autoUpdate, settings.checkIntervalMinutes, settings.manifestUrl]);
+  }, [supported, settings.autoUpdate, settings.checkIntervalMinutes]);
 
   return (
     <div className="page" style={{ maxWidth: 720 }}>
@@ -134,13 +131,17 @@ export function SettingsView() {
         </label>
 
         <div className="field">
-          <label className="field-label">Update manifest URL (GitHub Releases)</label>
+          <label className="field-label">Update manifest URL (optional override)</label>
           <input
             className="input"
-            placeholder="https://github.com/<owner>/<repo>/releases/latest/download/latest.json"
+            placeholder="Built-in Krevo endpoint"
             defaultValue={settings.manifestUrl}
             onBlur={(e) => update({ manifestUrl: e.target.value })}
           />
+          <div className="faint" style={{ fontSize: 11.5, marginTop: 5 }}>
+            Leave empty to use the built-in Krevo update endpoint. Only set this to point at a
+            different release manifest.
+          </div>
         </div>
 
         <div className="field">

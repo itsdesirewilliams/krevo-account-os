@@ -8,7 +8,10 @@ export interface SettingsData {
   interfaceFace: InterfaceFace;
   /** Master switch for the updater. */
   autoUpdate: boolean;
-  /** GitHub Releases manifest URL, e.g. .../releases/latest/download/latest.json */
+  /**
+   * Optional manifest-URL override. Empty (the default) means "use the built-in
+   * Krevo endpoint" baked into tauri.conf.json (`plugins.updater.endpoints`).
+   */
   manifestUrl: string;
   /** Public-key override for rotation; empty means "use the baked fallback". */
   publicKeyOverride: string;

@@ -18,13 +18,3 @@ export function parseAmount(raw: string | number | null | undefined): number {
   const n = Number.parseFloat(match[0]);
   return Number.isFinite(n) ? n : 0;
 }
-
-/** Format a loosely typed charges string for display. */
-export function formatCharges(charges: string): string {
-  const raw = (charges ?? "").trim();
-  if (!raw) return "";
-  if (/^[0-9]+(\.[0-9]+)?$/.test(raw)) {
-    return "\u20B9" + Number(raw).toLocaleString("en-IN", { maximumFractionDigits: 2 });
-  }
-  return raw;
-}

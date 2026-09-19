@@ -18,6 +18,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "plans", label: "Plans" },
 ];
 
+/** Finance: a ledger workspace - money line first, real records beneath. */
 export function FinanceView() {
   const state = useStoreState();
   const { data: team } = useTeam();
@@ -26,7 +27,7 @@ export function FinanceView() {
 
   const [tab, setTab] = useState<Tab>("month");
   const [year, setYear] = useState(today.getFullYear());
-  const [month, setMonth] = useState(today.getMonth() + 1); // 1-12
+  const [month, setMonth] = useState(today.getMonth() + 1);
   const [included, setIncluded] = useState<ProjectStatus[]>([...BOOKED_PROJECT_STATUSES]);
 
   const toggleStatus = (status: ProjectStatus) => {
@@ -48,29 +49,29 @@ export function FinanceView() {
   const isCurrentMonth = year === today.getFullYear() && month === today.getMonth() + 1;
 
   return (
-    <div className="p-6 max-w-4xl overflow-y-auto">
-      <div className="flex items-center gap-2 mb-4">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            className={"btn " + (tab === t.id ? "btn-primary" : "btn-ghost")}
-            onClick={() => setTab(t.id)}
-          >
-            {t.label}
-          </button>
-        ))}
+    <div className="page-wide">
+      <div className="page-head">
+        <div>
+          <h1 className="page-title">Finance</h1>
+          <p className="page-sub">Booked, collected, costs and expenses — as records, not cards.</p>
+        </div>
+        <div className="seg" role="group" aria-label="Finance view">
+          {TABS.map((entry) => (
+            <button key={entry.id} className={"seg-btn" + (tab === entry.id ? " on" : "")} onClick={() => setTab(entry.id)}>
+              {entry.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {(tab === "month" || tab === "year") && (
-        <div className="flex flex-wrap items-center gap-2 mb-4 text-[12px] text-dim">
-          <span>Include:</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+          <span className="label">Include</span>
           {PROJECT_STATUSES.map((status) => (
             <button
               key={status}
-              className={
-                "btn btn-ghost !py-0.5 !px-2 " +
-                (included.includes(status) ? "!border-[color:var(--accent)] !text-[color:var(--accent)]" : "")
-              }
+              className={"seg-btn" + (included.includes(status) ? " on" : "")}
+              style={{ border: "1px solid " + (included.includes(status) ? "var(--accent-line)" : "var(--line)") }}
               onClick={() => toggleStatus(status)}
             >
               {PROJECT_STATUS_LABELS[status]}

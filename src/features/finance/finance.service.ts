@@ -123,19 +123,44 @@ export function allProjects(accounts: Account[]): RevenueRow[] {
   return rows;
 }
 
-/** Payments collected in a month, across every project (cash is cash). */
-export function collectedInMonth(accounts: Account[], year: number, month: number): number {
-  let total = 0;
+export interface CollectedRow {
+  paymentId: string;
+  accountId: string;
+  accountName: string;
+  projectId: string;
+  projectName: string;
+  amount: number;
+  /** ISO yyyy-mm-dd */
+  date: string;
+}
+
+/** Payment-level collections in a month, across every project (cash is cash). */
+export function collectedRowsForMonth(accounts: Account[], year: number, month: number): CollectedRow[] {
+  const rows: CollectedRow[] = [];
   for (const account of accounts) {
     const overview = overviewOf(account);
     if (!overview) continue;
     for (const project of overview.projects) {
       for (const payment of project.payments) {
-        if (inMonth(payment.date, year, month)) total += payment.amount;
+        if (!inMonth(payment.date, year, month)) continue;
+        rows.push({
+          paymentId: payment.id,
+          accountId: account.id,
+          accountName: account.name,
+          projectId: project.id,
+          projectName: project.projectName || project.eventName || "Untitled",
+          amount: payment.amount,
+          date: payment.date,
+        });
       }
     }
   }
-  return total;
+  return rows;
+}
+
+/** Payments collected in a month, across every project. */
+export function collectedInMonth(accounts: Account[], year: number, month: number): number {
+  return collectedRowsForMonth(accounts, year, month).reduce((sum, row) => sum + row.amount, 0);
 }
 
 function teamCostRows(team: TeamData): CostRow[] {

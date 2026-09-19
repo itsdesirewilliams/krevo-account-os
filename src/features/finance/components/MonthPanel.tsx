@@ -1,9 +1,20 @@
 import type { Account, ProjectStatus } from "../../../types";
 import type { TeamData } from "../../team/team.types";
 import type { FinanceData } from "../finance.types";
-import { financeForMonth, monthLabel } from "../finance.service";
-import { formatINR } from "../../../lib/currency";
+import { collectedRowsForMonth, financeForMonth, monthLabel } from "../finance.service";
+import { Money } from "../../../components/ui/Money";
+import { dueLabel } from "../../../lib/dates";
 
+type LedgerRow = {
+  id: string;
+  date: string;
+  kind: "Booked" | "Collected" | "Expense";
+  detail: string;
+  context: string;
+  amount: number;
+};
+
+/** One month as a chronological ledger plus per-account and recurring-cost tables. */
 export function MonthPanel({
   accounts,
   team,
@@ -29,121 +40,170 @@ export function MonthPanel({
 }) {
   const data = financeForMonth(accounts, team, finance, year, month, includedStatuses);
 
+  const ledger: LedgerRow[] = [
+    ...data.bookedRows.map((row) => ({
+      id: `b-${row.projectId}`,
+      date: row.eventDate,
+      kind: "Booked" as const,
+      detail: row.projectName,
+      context: row.accountName,
+      amount: row.amount,
+    })),
+    ...collectedRowsForMonth(accounts, year, month).map((row) => ({
+      id: `c-${row.paymentId}`,
+      date: row.date,
+      kind: "Collected" as const,
+      detail: row.projectName,
+      context: row.accountName,
+      amount: row.amount,
+    })),
+    ...data.expenseRows.map((row) => ({
+      id: `e-${row.id}`,
+      date: row.date || `${year}-${String(month).padStart(2, "0")}-01`,
+      kind: "Expense" as const,
+      detail: row.label || row.category,
+      context: row.recurringMonthly ? `${row.category} · monthly` : row.category,
+      amount: row.amount,
+    })),
+  ].sort((a, b) => a.date.localeCompare(b.date) || a.kind.localeCompare(b.kind));
+
   return (
-    <>
-      <div className="flex items-center gap-3 mb-5">
-        <button className="icon-btn" title="Previous month" onClick={onPrev}>&lsaquo;</button>
-        <div className="text-[15px] font-semibold uppercase tracking-[0.08em]">{monthLabel(year, month)}</div>
-        <button className="icon-btn" title="Next month" onClick={onNext}>&rsaquo;</button>
+    <div className="reveal">
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+        <button className="icon-btn" title="Previous month" onClick={onPrev} aria-label="Previous month">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8"
+            strokeLinecap="round" strokeLinejoin="round"><path d="M15 6l-6 6l6 6" /></svg>
+        </button>
+        <span className="display" style={{ fontSize: 15 }}>{monthLabel(year, month)}</span>
+        <button className="icon-btn" title="Next month" onClick={onNext} aria-label="Next month">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8"
+            strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6l-6 6" /></svg>
+        </button>
         {!isCurrentMonth && (
-          <button className="btn btn-ghost" onClick={onCurrent}>Current Month</button>
+          <button className="btn btn-ghost" onClick={onCurrent}>Current month</button>
         )}
       </div>
 
-      <div className="flex flex-wrap gap-3 mb-6">
-        <div className="finance-card">
-          <div className="finance-label">Booked</div>
-          <div className="finance-value">{formatINR(data.bookedTotal)}</div>
+      <div className="money-line" style={{ marginBottom: 20 }}>
+        <div className="money-cell">
+          <span className="label">Booked</span>
+          <Money value={data.bookedTotal} size="lg" />
         </div>
-        <div className="finance-card">
-          <div className="finance-label">Collected</div>
-          <div className="finance-value">{formatINR(data.collectedTotal)}</div>
+        <div className="money-cell">
+          <span className="label">Collected</span>
+          <Money value={data.collectedTotal} size="lg" />
         </div>
-        <div className="finance-card">
-          <div className="finance-label">Outstanding</div>
-          <div className="finance-value">{formatINR(data.outstandingTotal)}</div>
+        <div className="money-cell">
+          <span className="label">Outstanding</span>
+          <Money value={data.outstandingTotal} size="lg" tone={data.outstandingTotal > 0 ? "neg" : "none"} />
         </div>
-        <div className="finance-card">
-          <div className="finance-label">Costs</div>
-          <div className="finance-value">{formatINR(data.costTotal)}</div>
+        <div className="money-cell">
+          <span className="label">Costs</span>
+          <Money value={data.costTotal} size="lg" />
         </div>
-        <div className="finance-card">
-          <div className="finance-label">Expenses</div>
-          <div className="finance-value">{formatINR(data.expenseTotal)}</div>
+        <div className="money-cell">
+          <span className="label">Expenses</span>
+          <Money value={data.expenseTotal} size="lg" />
         </div>
-        <div className={"finance-card" + (data.net >= 0 ? " net-pos" : " net-neg")}>
-          <div className="finance-label">Net</div>
-          <div className="finance-value">{formatINR(data.net)}</div>
+        <div className="money-cell">
+          <span className="label">Net</span>
+          <Money value={data.net} size="lg" tone={data.net >= 0 ? "pos" : "neg"} />
         </div>
       </div>
 
-      <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-dim mb-2">
-        Booked <span className="normal-case tracking-normal font-normal">- quoted amounts by event month</span>
+      <div className="section-head" style={{ marginTop: 0 }}>
+        <span className="section-title">Ledger</span>
+        <span className="faint" style={{ fontSize: 11 }}>{ledger.length} entries</span>
       </div>
-      {data.bookedRows.length === 0 ? (
-        <div className="text-[13px] text-dim py-3">No booked projects dated in this month.</div>
+      {ledger.length === 0 ? (
+        <div className="muted" style={{ padding: "8px 0" }}>No activity in this month.</div>
       ) : (
-        <div className="fin-list">
-          {data.bookedRows.map((row) => (
-            <div key={row.projectId} className="fin-row">
-              <span className="fin-name">{row.accountName}</span>
-              <span className="flex-1 truncate text-dim">{row.projectName}</span>
-              <span className={"status-chip status-" + row.status}>{row.status}</span>
-              <span className="fin-amount">{formatINR(row.amount)}</span>
-            </div>
-          ))}
-          <div className="fin-row total">
-            <span className="flex-1">Total</span>
-            <span className="fin-amount">{formatINR(data.bookedTotal)}</span>
-          </div>
-        </div>
+        <table className="tbl">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Kind</th>
+              <th>Detail</th>
+              <th>Context</th>
+              <th className="num">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {ledger.map((row) => (
+              <tr key={row.id}>
+                <td className="t-muted">{row.date ? dueLabel(row.date) : "—"}</td>
+                <td>
+                  <span className={"chip" + (row.kind === "Collected" ? " pay-paid" : row.kind === "Expense" ? "" : " status-confirmed")}>
+                    {row.kind}
+                  </span>
+                </td>
+                <td className="t-strong">{row.detail}</td>
+                <td className="t-muted">{row.context}</td>
+                <td className="num">
+                  <Money value={row.kind === "Expense" ? -row.amount : row.amount} tone={row.kind === "Expense" ? "neg" : "none"} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       )}
 
       {data.byAccount.length > 0 && (
         <>
-          <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-dim mt-6 mb-2">By Account</div>
-          <div className="fin-list">
-            {data.byAccount.map((row) => (
-              <div key={row.accountId} className="fin-row">
-                <span className="flex-1 truncate">{row.accountName}</span>
-                <span className="text-dim text-[12px]">
-                  {row.projects} {row.projects === 1 ? "project" : "projects"}
-                </span>
-                <span className="fin-amount" title="Booked">{formatINR(row.booked)}</span>
-              </div>
-            ))}
+          <div className="section-head" style={{ marginTop: 22 }}>
+            <span className="section-title">By account</span>
           </div>
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>Account</th>
+                <th className="num">Projects</th>
+                <th className="num">Booked</th>
+                <th className="num">Collected</th>
+                <th className="num">Outstanding</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.byAccount.map((row) => (
+                <tr key={row.accountId}>
+                  <td className="t-strong">{row.accountName}</td>
+                  <td className="num t-muted">{row.projects}</td>
+                  <td className="num"><Money value={row.booked} /></td>
+                  <td className="num"><Money value={row.collected} /></td>
+                  <td className="num">
+                    {row.outstanding > 0 ? <Money value={row.outstanding} tone="neg" /> : <span className="t-muted">—</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </>
       )}
 
-      <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-dim mt-6 mb-2">
-        Costs <span className="normal-case tracking-normal font-normal">- recurring monthly (Team)</span>
-      </div>
-      {data.costRows.length === 0 ? (
-        <div className="text-[13px] text-dim py-3">No active recurring costs in Team.</div>
-      ) : (
-        <div className="fin-list">
-          {data.costRows.map((cost) => (
-            <div key={cost.memberId} className="fin-row">
-              <span className="flex-1 truncate">{cost.name}</span>
-              <span className="fin-amount">{formatINR(cost.amount)}</span>
-            </div>
-          ))}
-          <div className="fin-row total">
-            <span className="flex-1">Total</span>
-            <span className="fin-amount">{formatINR(data.costTotal)}</span>
+      {data.costRows.length > 0 && (
+        <>
+          <div className="section-head" style={{ marginTop: 22 }}>
+            <span className="section-title">Recurring team costs</span>
+            <span className="faint" style={{ fontSize: 11 }}>monthly</span>
           </div>
-        </div>
+          <table className="tbl">
+            <tbody>
+              {data.costRows.map((cost) => (
+                <tr key={cost.memberId}>
+                  <td className="grow">{cost.name}</td>
+                  <td className="t-muted">{cost.type === "person" ? "Person" : "Tool"}</td>
+                  <td className="num"><Money value={cost.amount} /></td>
+                </tr>
+              ))}
+              <tr>
+                <td className="t-strong">Total</td>
+                <td />
+                <td className="num"><Money value={data.costTotal} /></td>
+              </tr>
+            </tbody>
+          </table>
+        </>
       )}
-
-      <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-dim mt-6 mb-2">Expenses</div>
-      {data.expenseRows.length === 0 ? (
-        <div className="text-[13px] text-dim py-3">No expenses in this month.</div>
-      ) : (
-        <div className="fin-list">
-          {data.expenseRows.map((expense) => (
-            <div key={expense.id} className="fin-row">
-              <span className="flex-1 truncate">{expense.label || expense.category}</span>
-              <span className="text-dim text-[12px]">{expense.category}{expense.recurringMonthly ? " · monthly" : ""}</span>
-              <span className="fin-amount">{formatINR(expense.amount)}</span>
-            </div>
-          ))}
-          <div className="fin-row total">
-            <span className="flex-1">Total</span>
-            <span className="fin-amount">{formatINR(data.expenseTotal)}</span>
-          </div>
-        </div>
-      )}
-    </>
+    </div>
   );
 }

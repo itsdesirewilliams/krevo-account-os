@@ -3,8 +3,11 @@ import { first } from "../test-utils/assert";
 import {
   addDays,
   addWeeks,
+  dueLabel,
   formatDate,
+  isOverdue,
   parseIsoDate,
+  shortDate,
   startOfIsoWeek,
   todayLocalIso,
   weekKey,
@@ -66,5 +69,30 @@ describe("ISO calendar helpers", () => {
     expect(weekKey("2026-10-29")).toBe("2026-W44");
     expect(weekKey("2026-01-01")).toBe("2026-W01");
     expect(weekKey("bad")).toBe("");
+  });
+});
+
+describe("operational date language", () => {
+  const today = "2026-10-29";
+
+  it("labels relative days in operational language", () => {
+    expect(dueLabel("2026-10-29", today)).toBe("Today");
+    expect(dueLabel("2026-10-30", today)).toBe("Tomorrow");
+    expect(dueLabel("2026-10-28", today)).toBe("Yesterday");
+    expect(dueLabel("2026-10-26", today)).toBe("3d overdue");
+    expect(dueLabel("2026-10-31", today)).toBe("in 2d");
+    expect(dueLabel("2026-11-20", today)).toBe("Fri 20 Nov");
+    expect(dueLabel("", today)).toBe("");
+  });
+
+  it("formats compact dates", () => {
+    expect(shortDate("2026-10-29")).toBe("Thu 29 Oct");
+  });
+
+  it("detects overdue", () => {
+    expect(isOverdue("2026-10-28", today)).toBe(true);
+    expect(isOverdue("2026-10-29", today)).toBe(false);
+    expect(isOverdue(null, today)).toBe(false);
+    expect(isOverdue("", today)).toBe(false);
   });
 });

@@ -1,9 +1,12 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import "@fontsource/mona-sans/400.css";
-import "@fontsource/mona-sans/500.css";
-import "@fontsource/mona-sans/600.css";
-import "@fontsource/mona-sans/700.css";
+import "@fontsource/geist-sans/400.css";
+import "@fontsource/geist-sans/500.css";
+import "@fontsource/geist-sans/600.css";
+import "@fontsource/geist-sans/700.css";
+import "@fontsource/geist-mono/400.css";
+import "@fontsource/geist-mono/500.css";
+import "@fontsource-variable/bricolage-grotesque";
 import "./index.css";
 import { App } from "./App";
 import { StoreProvider } from "./state/store";
@@ -14,8 +17,6 @@ import { STORAGE_KEY, isTauri, storage } from "./storage";
 import { flushAll } from "./state/flush";
 import { TeamProvider } from "./features/team/teamState";
 import { TEAM_KEY } from "./features/team/team.repository";
-import { ProspectingProvider } from "./features/prospecting/prospectingState";
-import { ContentProvider } from "./features/content/contentState";
 import { FinanceProvider } from "./features/finance/financeState";
 import { PlansProvider } from "./features/plans/plansState";
 import { TasksProvider } from "./features/tasks/tasksState";
@@ -91,19 +92,15 @@ async function bootstrap() {
         <UIProvider>
           <NavProvider>
             <TeamProvider>
-              <ProspectingProvider>
-                <ContentProvider>
-                  <FinanceProvider>
-                    <PlansProvider>
-                      <TasksProvider>
-                        <SettingsProvider>
-                          <App />
-                        </SettingsProvider>
-                      </TasksProvider>
-                    </PlansProvider>
-                  </FinanceProvider>
-                </ContentProvider>
-              </ProspectingProvider>
+              <FinanceProvider>
+                <PlansProvider>
+                  <TasksProvider>
+                    <SettingsProvider>
+                      <App />
+                    </SettingsProvider>
+                  </TasksProvider>
+                </PlansProvider>
+              </FinanceProvider>
             </TeamProvider>
           </NavProvider>
         </UIProvider>

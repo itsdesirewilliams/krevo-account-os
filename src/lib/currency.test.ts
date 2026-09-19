@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatCharges, formatINR, parseAmount } from "./currency";
+import { formatINR, parseAmount } from "./currency";
 
 describe("parseAmount", () => {
   it("parses plain digits", () => {
@@ -34,17 +34,6 @@ describe("parseAmount", () => {
     expect(parseAmount(null)).toBe(0);
     expect(parseAmount(undefined)).toBe(0);
     expect(parseAmount(Number.NaN)).toBe(0);
-  });
-});
-
-describe("formatCharges", () => {
-  it("adds the rupee symbol with Indian grouping", () => {
-    expect(formatCharges("25000")).toBe("\u20B925,000");
-  });
-
-  it("returns non-numeric text unchanged", () => {
-    expect(formatCharges("custom")).toBe("custom");
-    expect(formatCharges("")).toBe("");
   });
 });
 

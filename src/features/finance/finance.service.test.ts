@@ -3,7 +3,7 @@ import { first } from "../../test-utils/assert";
 import type { Account, Payment, Project } from "../../types";
 import type { TeamData, TeamMember } from "../team/team.types";
 import type { FinanceData } from "./finance.types";
-import { collectedInMonth, financeForMonth, financeForYear } from "./finance.service";
+import { collectedInMonth, collectedRowsForMonth, financeForMonth, financeForYear } from "./finance.service";
 
 const project = (over: Partial<Project> & { id: string }): Project => ({
   projectName: "Project",
@@ -119,6 +119,24 @@ describe("collectedInMonth", () => {
     ];
     expect(collectedInMonth(accounts, 2026, 10)).toBe(800);
     expect(collectedInMonth(accounts, 2026, 11)).toBe(0);
+  });
+});
+
+describe("collectedRowsForMonth", () => {
+  it("returns payment-level rows carrying project and account context", () => {
+    const accounts = [
+      account([project({ id: "p1", projectName: "Gala", payments: [payment("a", 500, "2026-10-01")] })]),
+    ];
+    const rows = collectedRowsForMonth(accounts, 2026, 10);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      paymentId: "a",
+      projectId: "p1",
+      projectName: "Gala",
+      accountName: "JK Entertainment",
+      amount: 500,
+      date: "2026-10-01",
+    });
   });
 });
 

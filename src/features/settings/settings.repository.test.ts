@@ -24,6 +24,12 @@ describe("normalizeSettingsData", () => {
     expect(settings.autoUpdate).toBe(false);
     expect(settings.checkOnLaunch).toBe(false);
   });
+
+  it("normalizes the interface face safely", () => {
+    expect(normalizeSettingsData({ interfaceFace: "bricolage" }).interfaceFace).toBe("bricolage");
+    expect(normalizeSettingsData({ interfaceFace: "comic-sans" }).interfaceFace).toBe("geist");
+    expect(defaultSettingsData().interfaceFace).toBe("geist");
+  });
 });
 
 describe("updateSettings", () => {

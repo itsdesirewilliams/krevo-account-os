@@ -4,13 +4,12 @@ import { useEscapeLayer } from "../../lib/useEscapeLayer";
 import { CloseIcon } from "../Icons";
 
 /**
- * Floating modal: dimmed overlay (workspace stays visible behind), Escape to
- * close, GSAP entrance animation. Used by both the global dialog system and
- * feature-local forms.
+ * The single modal: a focus overlay with GSAP entrance and stacked-Escape
+ * handling. Used for creation, prompt and confirmation dialogs.
  */
 export function Modal({
   title,
-  width = 440,
+  width,
   onClose,
   children,
 }: {
@@ -26,23 +25,25 @@ export function Modal({
     if (cardRef.current) {
       gsap.fromTo(
         cardRef.current,
-        { opacity: 0, y: 10, scale: 0.985 },
-        { opacity: 1, y: 0, scale: 1, duration: 0.18, ease: "power2.out" },
+        { opacity: 0, y: 8, scale: 0.99 },
+        { opacity: 1, y: 0, scale: 1, duration: 0.16, ease: "power2.out" },
       );
     }
   }, []);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div ref={cardRef} className="modal" style={{ width }}>
-        <div className="flex items-center justify-between mb-3">
-          <div className="modal-title mb-0">{title}</div>
-          <button className="icon-btn" onClick={onClose} title="Close">
+    <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div
+        ref={cardRef}
+        className="modal"
+        style={width ? { width } : undefined}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+          <div className="modal-title" style={{ margin: 0 }}>{title}</div>
+          <button className="icon-btn" onClick={onClose} title="Close" aria-label="Close">
             <CloseIcon />
           </button>
         </div>

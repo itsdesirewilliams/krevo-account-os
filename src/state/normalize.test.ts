@@ -3,7 +3,7 @@ import { first, present } from "../test-utils/assert";
 import { defaultState, normalize } from "./normalize";
 import { isOverview, overviewOf } from "../types";
 
-/* Legacy (V2) payload: sheets carried notes/tasks directly. */
+/* Legacy (V2) payload: sheets carried notes/tasks directly, plus stale UI refs. */
 const legacy = {
   accounts: [
     {
@@ -23,15 +23,11 @@ const legacy = {
             },
           ],
         },
-        {
-          id: "sh1",
-          name: "Content",
-          notes: "Client information",
-          tasks: [{ id: "t2", text: "Create poster", completed: false }],
-        },
+        { id: "sh1", name: "Content", notes: "Client information", tasks: [{ id: "t2", text: "Create poster" }] },
       ],
     },
   ],
+  // Obsolete fields from the previous model must simply be ignored.
   openTabs: ["acc1", "ghost"],
   activeAccountId: "acc1",
   activeSheetByAccount: { acc1: "sh1", gone: "x" },
@@ -47,14 +43,9 @@ describe("normalize - legacy migration", () => {
     expect(account.name).toBe("JK Entertainment");
   });
 
-  it("derives projectName from eventName", () => {
+  it("derives projectName and structured money (V4)", () => {
     const project = first(present(overviewOf(account)).projects);
     expect(project.projectName).toBe("Summer Gala");
-    expect(project.eventDate).toBe("2026-10-29");
-  });
-
-  it("migrates V3 charges to a structured quoted amount (V4)", () => {
-    const project = first(present(overviewOf(account)).projects);
     expect(project.charges).toBe("25000");
     expect(project.quotedAmount).toBe(25000);
     expect(project.status).toBe("confirmed");
@@ -70,10 +61,9 @@ describe("normalize - legacy migration", () => {
     expect(todo).toEqual({ id: expect.any(String), type: "todo" });
   });
 
-  it("drops stale tab and sheet-state references", () => {
-    expect(st.openTabs).toEqual(["acc1"]);
-    expect(st.activeSheetByAccount.acc1).toBe("sh1");
-    expect("gone" in st.activeSheetByAccount).toBe(false);
+  it("ignores obsolete tab/sheet-state fields (now nav-owned)", () => {
+    expect(st).toEqual({ accounts: st.accounts, trash: st.trash });
+    expect(Object.keys(st).sort()).toEqual(["accounts", "trash"]);
   });
 });
 
@@ -103,7 +93,6 @@ describe("normalize - V4 projects", () => {
                   status: "delivered",
                   payments: [{ id: "pay1", amount: 10000, date: "2026-10-01", note: "Advance" }],
                   eventDate: "2026-10-29",
-                  tasks: [],
                 },
               ],
             },
@@ -133,27 +122,14 @@ describe("normalize - V4 projects", () => {
   });
 });
 
-describe("normalize - invariants", () => {  it("gives every account an Overview sheet", () => {
+describe("normalize - invariants", () => {
+  it("gives every account an Overview sheet", () => {
     const st = normalize({
       accounts: [{ id: "a1", name: "No Overview", sheets: [{ id: "s1", name: "Notes", blocks: [] }] }],
     });
     const account = first(st.accounts);
     expect(account.sheets.some(isOverview)).toBe(true);
     expect(overviewOf(account)).not.toBeNull();
-  });
-
-  it("falls back to the first sheet when the remembered sheet is gone", () => {
-    const st = normalize({
-      accounts: [{ id: "a1", name: "A", sheets: [{ id: "ov", name: "Overview", projects: [] }] }],
-      activeSheetByAccount: { a1: "missing" },
-    });
-    expect(st.activeSheetByAccount.a1).toBe("ov");
-  });
-
-  it("repairs non-string section ids", () => {
-    const st = normalize({ activeAccountId: 42, openTabs: [1, "x"] });
-    expect(st.activeAccountId).toBeNull();
-    expect(st.openTabs).toEqual([]);
   });
 });
 

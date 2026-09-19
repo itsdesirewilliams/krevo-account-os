@@ -2,8 +2,10 @@ import type { Account, ProjectStatus } from "../../../types";
 import type { TeamData } from "../../team/team.types";
 import type { FinanceData } from "../finance.types";
 import { financeForYear } from "../finance.service";
-import { formatINR } from "../../../lib/currency";
+import { Money } from "../../../components/ui/Money";
+import { MonthBars } from "../../../components/ui/MonthBars";
 
+/** Twelve-row annual ledger with a compact trend strip. */
 export function YearPanel({
   accounts,
   team,
@@ -24,43 +26,86 @@ export function YearPanel({
   const data = financeForYear(accounts, team, finance, year, includedStatuses);
 
   return (
-    <>
-      <div className="flex items-center gap-3 mb-5">
-        <button className="icon-btn" title="Previous year" onClick={onPrevYear}>&lsaquo;</button>
-        <div className="text-[15px] font-semibold uppercase tracking-[0.08em]">{year}</div>
-        <button className="icon-btn" title="Next year" onClick={onNextYear}>&rsaquo;</button>
+    <div className="reveal">
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+        <button className="icon-btn" title="Previous year" onClick={onPrevYear} aria-label="Previous year">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8"
+            strokeLinecap="round" strokeLinejoin="round"><path d="M15 6l-6 6l6 6" /></svg>
+        </button>
+        <span className="display" style={{ fontSize: 15 }}>{year}</span>
+        <button className="icon-btn" title="Next year" onClick={onNextYear} aria-label="Next year">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8"
+            strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6l-6 6" /></svg>
+        </button>
       </div>
 
-      <div className="fin-list">
-        <div className="fin-row text-[11px] uppercase tracking-[0.08em] text-dim">
-          <span className="fin-name">Month</span>
-          <span className="fin-amount w-24 text-right">Booked</span>
-          <span className="fin-amount w-24 text-right">Collected</span>
-          <span className="fin-amount w-20 text-right">Costs</span>
-          <span className="fin-amount w-20 text-right">Expenses</span>
-          <span className="fin-amount w-24 text-right">Net</span>
+      <div className="money-line" style={{ marginBottom: 20 }}>
+        <div className="money-cell">
+          <span className="label">Booked</span>
+          <Money value={data.totals.booked} size="lg" />
         </div>
-        {data.months.map((row) => (
-          <div key={row.month} className="fin-row">
-            <span className="fin-name">{row.label}</span>
-            <span className="fin-amount w-24 text-right">{formatINR(row.booked)}</span>
-            <span className="fin-amount w-24 text-right">{formatINR(row.collected)}</span>
-            <span className="fin-amount w-20 text-right">{row.cost ? formatINR(row.cost) : "—"}</span>
-            <span className="fin-amount w-20 text-right">{row.expenses ? formatINR(row.expenses) : "—"}</span>
-            <span className={"fin-amount w-24 text-right " + (row.net >= 0 ? "" : "text-danger")}>
-              {formatINR(row.net)}
-            </span>
-          </div>
-        ))}
-        <div className="fin-row total">
-          <span className="fin-name">Total</span>
-          <span className="fin-amount w-24 text-right">{formatINR(data.totals.booked)}</span>
-          <span className="fin-amount w-24 text-right">{formatINR(data.totals.collected)}</span>
-          <span className="fin-amount w-20 text-right">{formatINR(data.totals.cost)}</span>
-          <span className="fin-amount w-20 text-right">{formatINR(data.totals.expenses)}</span>
-          <span className="fin-amount w-24 text-right">{formatINR(data.totals.net)}</span>
+        <div className="money-cell">
+          <span className="label">Collected</span>
+          <Money value={data.totals.collected} size="lg" />
+        </div>
+        <div className="money-cell">
+          <span className="label">Costs</span>
+          <Money value={data.totals.cost} size="lg" />
+        </div>
+        <div className="money-cell">
+          <span className="label">Expenses</span>
+          <Money value={data.totals.expenses} size="lg" />
+        </div>
+        <div className="money-cell">
+          <span className="label">Net</span>
+          <Money value={data.totals.net} size="lg" tone={data.totals.net >= 0 ? "pos" : "neg"} />
         </div>
       </div>
-    </>
+
+      <div className="section-head" style={{ marginTop: 0 }}>
+        <span className="section-title">Booked by month</span>
+      </div>
+      <MonthBars booked={data.months.map((m) => m.booked)} label={`Booked per month, ${year}`} />
+
+      <div className="section-head" style={{ marginTop: 22 }}>
+        <span className="section-title">Annual ledger</span>
+      </div>
+      <table className="tbl">
+        <thead>
+          <tr>
+            <th>Month</th>
+            <th className="num">Booked</th>
+            <th className="num">Collected</th>
+            <th className="num">Costs</th>
+            <th className="num">Expenses</th>
+            <th className="num">Net</th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.months.map((row) => (
+            <tr key={row.month}>
+              <td className="t-strong">{row.label}</td>
+              <td className="num"><Money value={row.booked} /></td>
+              <td className="num"><Money value={row.collected} /></td>
+              <td className="num t-muted">{row.cost ? <Money value={row.cost} /> : "—"}</td>
+              <td className="num t-muted">{row.expenses ? <Money value={row.expenses} /> : "—"}</td>
+              <td className="num">
+                <Money value={row.net} tone={row.net >= 0 ? "pos" : "neg"} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td>Total</td>
+            <td className="num"><Money value={data.totals.booked} /></td>
+            <td className="num"><Money value={data.totals.collected} /></td>
+            <td className="num"><Money value={data.totals.cost} /></td>
+            <td className="num"><Money value={data.totals.expenses} /></td>
+            <td className="num"><Money value={data.totals.net} tone={data.totals.net >= 0 ? "pos" : "neg"} /></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
   );
 }

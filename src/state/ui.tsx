@@ -15,8 +15,7 @@ export type Dialog =
   | { kind: "confirm"; message: string; onYes: () => void }
   | { kind: "new-account" }
   | { kind: "new-sheet"; accountId: string }
-  | { kind: "new-project"; accountId: string }
-  | { kind: "project"; accountId: string; projectId: string };
+  | { kind: "new-project"; accountId: string };
 
 interface UI {
   dialog: Dialog | null;
@@ -26,10 +25,13 @@ interface UI {
   newAccount: () => void;
   newSheet: (accountId: string) => void;
   newProject: (accountId: string) => void;
-  openProject: (accountId: string, projectId: string) => void;
-    menu: { x: number; y: number; items: MenuItem[] } | null;
+  menu: { x: number; y: number; items: MenuItem[] } | null;
   openMenu: (x: number, y: number, items: MenuItem[]) => void;
   closeMenu: () => void;
+  /** Global command palette (Cmd/Ctrl+K). */
+  paletteOpen: boolean;
+  openPalette: () => void;
+  closePalette: () => void;
 }
 
 const UIContext = createContext<UI | null>(null);
@@ -37,9 +39,12 @@ const UIContext = createContext<UI | null>(null);
 export function UIProvider({ children }: { children: ReactNode }) {
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   const closeDialog = useCallback(() => setDialog(null), []);
   const closeMenu = useCallback(() => setMenu(null), []);
+  const openPalette = useCallback(() => setPaletteOpen(true), []);
+  const closePalette = useCallback(() => setPaletteOpen(false), []);
 
   const value = useMemo<UI>(
     () => ({
@@ -54,12 +59,14 @@ export function UIProvider({ children }: { children: ReactNode }) {
       newAccount: () => setDialog({ kind: "new-account" }),
       newSheet: (accountId) => setDialog({ kind: "new-sheet", accountId }),
       newProject: (accountId) => setDialog({ kind: "new-project", accountId }),
-      openProject: (accountId, projectId) => setDialog({ kind: "project", accountId, projectId }),
       menu,
       openMenu: (x, y, items) => setMenu({ x, y, items }),
       closeMenu,
+      paletteOpen,
+      openPalette,
+      closePalette,
     }),
-    [dialog, menu, closeDialog, closeMenu],
+    [dialog, menu, closeDialog, closeMenu, paletteOpen, openPalette, closePalette],
   );
 
   return <UIContext.Provider value={value}>{children}</UIContext.Provider>;

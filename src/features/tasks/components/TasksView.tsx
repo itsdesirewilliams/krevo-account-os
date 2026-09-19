@@ -1,214 +1,151 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useTasks } from "../tasksState";
 import { useTeam } from "../../team/teamState";
 import { useTaskContextLabel, useTaskContextNav } from "../taskContext";
-import { sortedTasks } from "../tasks.repository";
-import { TASK_STATUSES, TASK_STATUS_LABELS, type TaskRecord, type TaskStatus } from "../tasks.types";
-import { CheckIcon, CloseIcon } from "../../../components/Icons";
+import { openTasks, sortedTasks, tasksDueAfter, tasksDueOn } from "../tasks.repository";
+import type { TaskRecord } from "../tasks.types";
+import { todayLocalIso } from "../../../lib/dates";
+import { TaskInput, TaskItem } from "../../../components/ui/TaskItem";
+import { Empty } from "../../../components/ui/Empty";
+import { AlertIcon } from "../../../components/Icons";
 
-type StatusFilter = "open" | "all" | "done";
-type GroupBy = "none" | "status" | "assignee" | "context";
+type AssigneeFilter = "all" | "none" | string;
 
-function TaskItem({ task }: { task: TaskRecord }) {
-  const tasks = useTasks();
-  const { data: team } = useTeam();
+function Group({ title, tone, tasks }: { title: string; tone?: "danger" | "accent"; tasks: TaskRecord[] }) {
   const contextLabel = useTaskContextLabel();
   const contextNav = useTaskContextNav();
-  const context = contextLabel(task.links);
-
+  if (tasks.length === 0) return null;
   return (
-    <div className="flex items-center gap-2.5 py-1 group">
-      <button
-        className={"check" + (task.status === "done" ? " on" : "")}
-        onClick={() => tasks.toggle(task.id)}
-        aria-label="Toggle task"
-      >
-        <CheckIcon />
-      </button>
-      <input
-        className={
-          "flex-1 bg-transparent border-0 outline-none text-[13.5px] min-w-0 " +
-          (task.status === "done" ? "line-through text-dim" : "text-text")
-        }
-        defaultValue={task.title}
-        onBlur={(e) => {
-          if (e.target.value !== task.title) tasks.updateTask(task.id, { title: e.target.value });
-        }}
-      />
-      {context && <span className="text-dim text-[11.5px] truncate max-w-[200px]">{context}</span>}
-      {contextNav.canOpen(task.links) && (
-        <button className="btn btn-ghost !py-0.5 !px-2 !text-[11.5px]" title="Open linked item" onClick={() => contextNav.open(task.links)}>
-          Open
-        </button>
-      )}
-      <select
-        className="input !py-0.5 !px-1.5 !text-[12px]"
-        value={task.priority}
-        title="Priority"
-        onChange={(e) => tasks.updateTask(task.id, { priority: e.target.value as TaskRecord["priority"] })}
-      >
-        <option value="low">Low</option>
-        <option value="normal">Normal</option>
-        <option value="high">High</option>
-      </select>
-      <select
-        className="input !py-0.5 !px-1.5 !text-[12px]"
-        value={task.assigneeId ?? ""}
-        title="Assignee"
-        onChange={(e) => tasks.updateTask(task.id, { assigneeId: e.target.value || null })}
-      >
-        <option value="">Unassigned</option>
-        {team.members.map((m) => (
-          <option key={m.id} value={m.id}>{m.name}</option>
+    <section className="section" style={{ marginTop: 0 }}>
+      <div className="section-head">
+        <span className="section-title" style={tone === "danger" ? { color: "var(--danger)" } : tone === "accent" ? { color: "var(--accent)" } : undefined}>
+          {tone === "danger" && <AlertIcon size={12} />} {title}
+        </span>
+        <span className="faint" style={{ fontSize: 11 }}>{tasks.length}</span>
+      </div>
+      <div className="list">
+        {tasks.map((task) => (
+          <TaskItem
+            key={task.id}
+            task={task}
+            detailed
+            context={contextLabel(task.links)}
+            onOpen={contextNav.canOpen(task.links) ? () => contextNav.open(task.links) : undefined}
+          />
         ))}
-      </select>
-      <input
-        className="input !py-0.5 !px-1.5 !text-[12px]"
-        type="date"
-        value={task.dueDate ?? ""}
-        title="Due date"
-        onChange={(e) => tasks.updateTask(task.id, { dueDate: e.target.value || null })}
-      />
-      <select
-        className="input !py-0.5 !px-1.5 !text-[12px]"
-        value={task.status}
-        title="Status"
-        onChange={(e) => tasks.setStatus(task.id, e.target.value as TaskStatus)}
-      >
-        {TASK_STATUSES.map((s) => (
-          <option key={s} value={s}>{TASK_STATUS_LABELS[s]}</option>
-        ))}
-      </select>
-      <button
-        className="icon-btn opacity-0 group-hover:opacity-100"
-        title="Delete task"
-        onClick={() => tasks.removeTask(task.id)}
-      >
-        <CloseIcon size={11} />
-      </button>
-    </div>
+      </div>
+    </section>
   );
 }
 
+/** "What do I need to do?" - an operational queue, not a project manager. */
 export function TasksView() {
   const tasks = useTasks();
   const { data: team } = useTeam();
-  const contextLabel = useTaskContextLabel();
+  const today = todayLocalIso();
 
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("open");
-  const [assigneeFilter, setAssigneeFilter] = useState<string>("all");
-  const [groupBy, setGroupBy] = useState<GroupBy>("none");
-
+  const [assignee, setAssignee] = useState<AssigneeFilter>("all");
+  const [showDone, setShowDone] = useState(false);
   const [title, setTitle] = useState("");
-  const [assigneeId, setAssigneeId] = useState("");
-  const [dueDate, setDueDate] = useState("");
+  const [newAssignee, setNewAssignee] = useState("");
+  const [newDue, setNewDue] = useState("");
+
+  const filtered = useMemo(() => {
+    if (assignee === "all") return tasks.tasks;
+    if (assignee === "none") return tasks.tasks.filter((t) => t.assigneeId === null);
+    return tasks.tasks.filter((t) => t.assigneeId === assignee);
+  }, [tasks.tasks, assignee]);
+
+  const open = openTasks(filtered);
+  const overdue = sortedTasks(open.filter((t) => t.dueDate !== null && t.dueDate < today));
+  const dueToday = sortedTasks(tasksDueOn(filtered, today));
+  const upcoming = sortedTasks(tasksDueAfter(filtered, today));
+  const noDate = sortedTasks(open.filter((t) => t.dueDate === null));
+  const done = filtered.filter((t) => t.status === "done");
+  const totalOpen = open.length;
 
   const add = () => {
     if (!title.trim()) return;
-    tasks.createTask({ title, assigneeId: assigneeId || null, dueDate: dueDate || null });
+    tasks.createTask({ title, assigneeId: newAssignee || null, dueDate: newDue || null });
     setTitle("");
-    setDueDate("");
+    setNewDue("");
   };
-
-  const filtered = sortedTasks(
-    tasks.tasks.filter((task) => {
-      if (statusFilter === "open" && task.status === "done") return false;
-      if (statusFilter === "done" && task.status !== "done") return false;
-      if (assigneeFilter === "none" && task.assigneeId !== null) return false;
-      if (assigneeFilter !== "all" && assigneeFilter !== "none" && task.assigneeId !== assigneeFilter) return false;
-      return true;
-    }),
-  );
-
-  const groupOf = (task: TaskRecord): string => {
-    if (groupBy === "status") return TASK_STATUS_LABELS[task.status];
-    if (groupBy === "assignee") {
-      const member = team.members.find((m) => m.id === task.assigneeId);
-      return member ? member.name : "Unassigned";
-    }
-    if (groupBy === "context") return contextLabel(task.links) || "No context";
-    return "All tasks";
-  };
-
-  const groups = new Map<string, TaskRecord[]>();
-  for (const task of filtered) {
-    const key = groupOf(task);
-    const list = groups.get(key) ?? [];
-    list.push(task);
-    groups.set(key, list);
-  }
 
   return (
-    <div className="p-6 max-w-4xl overflow-y-auto">
-      <div className="text-[15px] font-semibold uppercase tracking-[0.08em] mb-4">Tasks</div>
+    <div className="page-wide">
+      <div className="page-head">
+        <div>
+          <h1 className="page-title">Tasks</h1>
+          <p className="page-sub">
+            {overdue.length > 0
+              ? `${overdue.length} overdue · ${totalOpen} open`
+              : totalOpen === 0
+                ? "Nothing open"
+                : `${totalOpen} open`}
+          </p>
+        </div>
+        <select className="select" style={{ width: 180 }} value={assignee} onChange={(e) => setAssignee(e.target.value)} aria-label="Filter by assignee">
+          <option value="all">Everyone</option>
+          <option value="none">Unassigned</option>
+          {team.members.map((member) => (
+            <option key={member.id} value={member.id}>{member.name}</option>
+          ))}
+        </select>
+      </div>
 
-      {/* Quick add */}
-      <div className="flex flex-wrap items-center gap-2 mb-3">
+      {/* Quick capture */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 160px 150px auto", gap: 8, marginBottom: 20 }}>
         <input
-          className="input flex-1"
-          placeholder="+ Add task"
+          className="input"
+          placeholder="Add a task…"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") add();
           }}
+          aria-label="New task title"
         />
-        <select className="input" value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}>
+        <select className="select" value={newAssignee} onChange={(e) => setNewAssignee(e.target.value)} aria-label="New task assignee">
           <option value="">Unassigned</option>
-          {team.members.map((m) => (
-            <option key={m.id} value={m.id}>{m.name}</option>
+          {team.members.map((member) => (
+            <option key={member.id} value={member.id}>{member.name}</option>
           ))}
         </select>
-        <input className="input" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-        <button className="btn btn-primary" disabled={!title.trim()} onClick={add}>Add</button>
+        <input className="input" type="date" value={newDue} onChange={(e) => setNewDue(e.target.value)} aria-label="New task due date" />
+        <button className="btn btn-primary" disabled={!title.trim()} onClick={add}>Add task</button>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-2 mb-4 text-[12px] text-dim">
-        <div className="flex gap-1">
-          {(["open", "all", "done"] as StatusFilter[]).map((f) => (
-            <button
-              key={f}
-              className={"btn btn-ghost !py-0.5 !px-2 " + (statusFilter === f ? "!border-[color:var(--accent)] !text-[color:var(--accent)]" : "")}
-              onClick={() => setStatusFilter(f)}
-            >
-              {f === "open" ? "Open" : f === "all" ? "All" : "Done"}
-            </button>
-          ))}
-        </div>
-        <select className="input !py-0.5" value={assigneeFilter} onChange={(e) => setAssigneeFilter(e.target.value)}>
-          <option value="all">Everyone</option>
-          <option value="none">Unassigned</option>
-          {team.members.map((m) => (
-            <option key={m.id} value={m.id}>{m.name}</option>
-          ))}
-        </select>
-        <span className="ml-auto">Group by</span>
-        <select className="input !py-0.5" value={groupBy} onChange={(e) => setGroupBy(e.target.value as GroupBy)}>
-          <option value="none">None</option>
-          <option value="status">Status</option>
-          <option value="assignee">Assignee</option>
-          <option value="context">Project / Job</option>
-        </select>
-      </div>
-
-      {filtered.length === 0 ? (
-        <div className="text-[13px] text-dim py-6">No tasks match.</div>
+      {totalOpen === 0 && done.length === 0 ? (
+        <Empty title="No tasks yet" sub="Tasks are the work you run the business on — capture one above." mark={false} />
       ) : (
-        [...groups.entries()].map(([group, list]) => (
-          <div key={group} className="mb-5">
-            {groupBy !== "none" && (
-              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-dim mb-1">
-                {group} <span className="normal-case tracking-normal font-normal">({list.length})</span>
+        <>
+          <Group title="Overdue" tone="danger" tasks={overdue} />
+          <Group title="Today" tone="accent" tasks={dueToday} />
+          <Group title="Upcoming" tasks={upcoming} />
+          <Group title="No date" tasks={noDate} />
+          {done.length > 0 && (
+            <section className="section">
+              <div className="section-head">
+                <button className="btn btn-quiet" style={{ padding: 0 }} onClick={() => setShowDone((v) => !v)}>
+                  {showDone ? "Hide completed" : `Show completed (${done.length})`}
+                </button>
               </div>
-            )}
-            <div className="flex flex-col">
-              {list.map((task) => (
-                <TaskItem key={task.id} task={task} />
-              ))}
-            </div>
+              {showDone && (
+                <div className="list">
+                  {sortedTasks(done).map((task) => (
+                    <TaskItem key={task.id} task={task} detailed />
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+          <div style={{ marginTop: 18, maxWidth: 420 }}>
+            <TaskInput
+              placeholder="Add a task without a date…"
+              onAdd={(value) => tasks.createTask({ title: value, links: {} })}
+            />
           </div>
-        ))
+        </>
       )}
     </div>
   );

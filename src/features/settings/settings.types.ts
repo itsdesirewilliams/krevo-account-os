@@ -1,6 +1,11 @@
 /** Settings-owned persisted data (Phase 4). */
 
+/** Krevo ships one design system in two typographic faces. */
+export type InterfaceFace = "geist" | "bricolage";
+
 export interface SettingsData {
+  /** Interface face: Midnight/Geist or Bricolage personality. */
+  interfaceFace: InterfaceFace;
   /** Master switch for the updater. */
   autoUpdate: boolean;
   /** GitHub Releases manifest URL, e.g. .../releases/latest/download/latest.json */

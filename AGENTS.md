@@ -11,39 +11,42 @@ must follow the Enforcement Rules at the bottom.
 **Krevo Account OS** is a single-user, internal business-operations app for a social/creative
 agency. It tracks four things:
 
-| Domain | Where it lives today (after Phase 2) |
+| Domain | Where it lives today (after Phase 5) |
 |---|---|
-| **Projects** | Accounts → Overview sheet → projects (name, event, quoted amount, status pipeline, payments, date, plan) |
-| **Teams** | Team members (persons + tools) with monthly cost, jobs, SOP files; weekly work + value views |
-| **Money** | Finance view: booked vs collected revenue from projects/payments, costs from team members, expenses slice |
-| **Tasks** | Unified `features/tasks` store — assignee, due date, status, priority, links to project/job/sheet; Tasks section + Home dashboard |
+| **Projects** | Accounts → project ledger → **project workspace** (identity, status pipeline, quoted/paid/balance, tasks, payments, deliverables, plan) |
+| **Teams** | Team roster + member workspace (jobs, SOP files, open work); weekly work + value views |
+| **Money** | Finance workspace: money line + month/year/expenses/plans **ledgers** (booked vs collected, costs, expenses) |
+| **Tasks** | Unified `features/tasks` store — assignee, due date, status, priority, links to project/job/sheet; Tasks **execution queue** (Overdue/Today/Upcoming/No date) + Overview briefing |
 
-Supporting modules: **Prospecting** (sales sprints → prospect kanban, convert-to-account),
-**Content** (social accounts → posts with a month calendar, linked to projects), **Plans**
-(persisted pricing plans with social deliverables).
+Supporting modules: **Plans** (persisted pricing plans, seeded into quoted amounts).
+**Prospecting and Content were removed in Phase 5** — the product is a focused business OS
+(operate accounts, projects, tasks, team and money), not a CRM/CMS.
 
 **Locked-in product decisions** (made with the owner):
-- **Desktop-only.** The shipping form is a Tauri desktop executable (Phase 4). The Vite browser
-  app remains the development/test environment. Vercel/hosted web deployment is **not** a target.
+- **Desktop-only.** The shipping form is a Tauri desktop executable. The Vite browser app remains
+  the development/test environment. Hosted web deployment (Vercel) is **not** a target.
 - **Money depth**: payments per project (advance/balance, paid/pending), one-off + recurring
   expenses in Finance, monthly AND yearly reports, per-account profitability. Currency is INR.
 - **Unified tasks**: one task model with assignee (team member), due date, status, priority,
-  links to project/job/sheet; plus a Tasks dashboard and a Home dashboard.
-- **Single user, no auth.** Projects gain a status pipeline
+  links to project/job/sheet; plus the Tasks queue and the Overview briefing.
+- **Single user, no auth.** Projects carry a status pipeline
   (`lead | confirmed | delivered | on_hold | cancelled`); Finance excludes unconfirmed deals
   from booked revenue by default.
 - **Weekly team work + value tracking** (see §5): derived entirely from unified tasks — no
   work-log, no timesheet, no hours, no new entities. Revenue is shown as project context only,
   never attributed to an individual member.
+- **One design system, two interface faces** (see §8): dark-only "Krevo Midnight" with acid lime
+  as a **signal**, switchable Geist/Bricolage typographic personality, persisted in Settings.
 
 ---
 
 ## 2. Tech stack & commands
 
 React 18 · TypeScript (strict, `noUncheckedIndexedAccess`) · Vite 6 · Tailwind CSS v4 · GSAP ·
-**vitest** for tests · **Tauri 2** (desktop shell: SQLite key/value storage, fs blobs, updater).
-The browser build remains the development/test environment; the shipping form is the Tauri
-desktop executable.
+**vitest** for tests · **Tauri 2** (desktop shell: SQLite key/value storage, fs blobs, updater) ·
+**Geist Sans / Geist Mono** + **Bricolage Grotesque Variable** (bundled locally) ·
+**Tabler Icons** (MIT). The browser build remains the development/test environment; the shipping
+form is the Tauri desktop executable.
 
 | Command | Purpose |
 |---|---|
@@ -64,69 +67,63 @@ desktop executable.
 src/
   main.tsx                    Entry; loads accounts state + one-time legacy-task migration,
                               mounts providers, imports bundled fonts
-  App.tsx                     Shell: header, StorageBanner, AppNav, MainContent section switcher
+  App.tsx                     Shell: sidebar, WorkspaceHeader, storage banner, section switch,
+                              first-run Overview, command palette hosts; face + title effects
   types.ts                    Core model V4: Account, Sheet (Overview|Custom), Block (union),
                               Project (status/quotedAmount/payments), Payment, Trash, money helpers.
                               Tasks live in features/tasks, not here.
-  storage/index.ts            StorageDriver (load/save/flush + saveBlob/loadBlob/removeBlob) +
-                              BrowserStorageDriver + onStorageError; blobs.ts = IndexedDB store;
-                              tauri.ts = SQLite kv + fs blobs; migrate.ts = pure localStorage→SQLite
+  storage/index.ts            StorageDriver (load/save/flush + blobs) + BrowserStorageDriver +
+                              onStorageError; blobs.ts (IndexedDB); tauri.ts (SQLite kv + fs);
+                              migrate.ts (pure localStorage→SQLite)
   state/
-    store.tsx                 StoreProvider with SEPARATE state + actions contexts
-                              (useStoreState / useStoreActions). Mutations via update() →
-                              structuredClone → normalize → debounced save; flush on exit.
-    ui.tsx                    UI context: dialogs (prompt/confirm), context menu
-    nav.tsx                   Nav context: activeSection, teamMemberId, sprintId, socialAccountId
+    store.tsx                 DOMAIN store (accounts + trash) with separate state/actions
+                              contexts; update() → structuredClone → normalize → debounced save
+    ui.tsx                    UI context: dialogs, context menu, command palette open state
+    nav.tsx                   Navigation slice (see §8): section, account/project/sheet context,
+                              trash view, pins, recents, session history for Back
     persist.ts                usePersistentState (+ ready) and useFlushOnExit
     flush.ts                  Exit-flush registry (flushAll) awaited by the Tauri close handler
-    normalize.ts              Deep normalization + V2→V3 migration for AppState
+    normalize.ts              Domain-only normalization + V2→V3 migration (accounts + trash)
   app/
-    AppNav.tsx                Sidebar: sections, accounts list, color filters, context menus
-    navigation.ts             Nav state types
+    AppSidebar.tsx            Persistent nav: Overview/Tasks/Team/Finance + curated Accounts
+                              (Pinned + Recent) + Trash/Settings footer
+    WorkspaceHeader.tsx       Breadcrumbs, intelligent Back, version chip, palette entry
+    CommandPalette.tsx        Ctrl/Cmd+K universal navigation layer (navigate/accounts/projects/faces)
+    paletteSearch.ts          Pure ranking + grouping for the palette (+ tests)
+    navigation.ts             Section ids, labels, NavData contract
   lib/
     id.ts                     genId → crypto.randomUUID()
-    dates.ts                  formatDate · nowIso · todayLocalIso
-    currency.ts               formatINR · parseAmount (strict) · formatCharges
-    useEscapeLayer.ts         Stacked Escape handling (topmost dialog only)
-    useDismissOnOutsideClick.ts
+    dates.ts                  formatDate · nowIso · todayLocalIso · dueLabel · shortDate · isOverdue
+    currency.ts               formatINR · parseAmount (strict)
+    useEscapeLayer.ts         Stacked Escape handling (topmost overlay only)
   components/
-    Workspace · SheetBar · AccountTabs · OverviewSheet · CustomSheet · TrashView · ContextMenu
-    Icons · StorageBanner
-    ui/FeatureEmpty · ui/TaskRow (TaskRow + TaskInput, shared everywhere)
-    modals/Modal (single modal impl) · modals/ModalHost (generic dialogs)
-      modals/ProjectDialog (money + status + tasks) · modals/NewProjectDialog
+    TrashView · ContextMenu · Icons · StorageBanner
+    ui/Empty (knight states) · ui/Money (single money renderer) · ui/MonthBars ·
+       ui/TaskItem (TaskItem + TaskInput, the single task row everywhere)
+    modals/Modal (single modal impl) · modals/ModalHost (prompt/confirm/new account/sheet)
+      modals/NewProjectDialog (creation only; editing lives in the project workspace)
   features/
-    team/                     team.types · team.repository (pure, immutable, deep-normalizing)
-                              teamState (usePersistentState) · teamValue.service (pure weekly
-                              work + cost/value derivation) · components/TeamView ·
-                              MemberWeeklyPanel · TeamWeeklyBoard · WeekNav
-    prospecting/              prospecting.types · prospecting.repository (pure, immutable)
-                              prospectingState (usePersistentState) · components/ProspectingView
-                              (kanban board + convert-to-account)
-    content/                  content.types · content.repository (pure, immutable)
-                              contentState (usePersistentState) · components/ContentView ·
-                              ContentCalendar (month grid + deliverable fulfillment)
-    finance/                  finance.types · finance.repository (pure: expenses + categories)
-                              financeState (usePersistentState) · finance.service (pure derivation:
-                              booked/collected/expenses/year) · components/FinanceView +
-                              MonthPanel · YearPanel · ExpensesPanel · PlansPanel
-    plans/                    plans.types · plans.repository (pure, persisted default PLANS A/B,
-                              deliverable defaults) · plansState (usePersistentState)
-    tasks/                    tasks.types · tasks.repository (pure: CRUD, cascades, selectors,
-                              legacy extraction) · tasksState (usePersistentState) ·
-                              taskContext (context labels) · components/TasksView
-    home/                     components/HomeView (overdue/today tasks, upcoming events,
-                              month finance snapshot, recent payments)
-    settings/                 settings.types · settings.repository (pure) · settingsState
-                              (usePersistentState) · updater.ts (Tauri facade) ·
-                              components/SettingsView (real updater UI)
+    accounts/                 AccountsIndex (roster table) · AccountWorkspace (identity + money +
+                              Projects/Sheets surfaces) · ProjectsTable · ProjectWorkspace ·
+                              SheetWorkspace
+    tasks/                    tasks.types · tasks.repository (pure CRUD/cascades/selectors) ·
+                              tasksState · taskContext (labels + Open cross-links) · TasksView
+    team/                     team.types · team.repository (pure) · teamState · teamValue.service
+                              (pure weekly value) · TeamView · MemberDetail (jobs + SOP) ·
+                              MemberForm · MemberWeeklyPanel · TeamWeeklyBoard · WeekNav
+    finance/                  finance.types · finance.repository (expenses) · financeState ·
+                              finance.service (pure: booked/collected/rows/expenses/year) ·
+                              FinanceView · MonthPanel (ledger) · YearPanel · ExpensesPanel · PlansPanel
+    plans/                    plans.types · plans.repository · plansState
+    home/                     components/HomeView (Overview briefing)
+    settings/                 settings.types (interfaceFace) · settings.repository · settingsState ·
+                              updater.ts (Tauri facade) · components/SettingsView
   test-utils/assert.ts        Test-only `first()` / `present()` narrowing helpers
 tests                         Co-located as src/**/*.test.ts (vitest)
 vitest.config.ts
-src-tauri/                    Tauri 2 desktop shell (Cargo.toml, tauri.conf.json, capabilities,
-                              icons) · src/lib.rs = updater commands + window-exit flush;
-                              main.rs · app-icon.png (source; regenerate icons with
-                              `npx tauri icon src-tauri/app-icon.png`)
+src-tauri/                    Tauri 2 desktop shell · src/lib.rs = updater commands + exit flush;
+                              app-icon.svg (source; regenerate with
+                              `npx tauri icon src-tauri/app-icon.svg`)
 legacy/                       Old vanilla-JS app, REFERENCE ONLY — nothing imports it
 ```
 
@@ -284,6 +281,24 @@ finance math, and the storage driver.
 - **Note:** the Rust side requires the Tauri/Rust toolchain (not present on the authoring
   machine); the JS side is fully typechecked/built/tested here.
 
+### Phase 5 — Interface & information-architecture overhaul ✅ COMPLETE
+- **Modules**: **Prospecting and Content were removed** (code, providers, nav fields, tests) —
+  the product is accounts/projects/tasks/team/money. Sections are now
+  `overview | accounts | tasks | team | finance | settings`.
+- **Navigation**: a persistent sidebar (primary surfaces + a **curated Accounts launchpad**:
+  Pinned + Recent ≤5 + All accounts) replaces the old module dropdown, IDE tabs and sheet bar.
+  A **global command palette** (`Ctrl/Cmd+K`) searches sections, accounts, projects and
+  interface faces, with keyboard nav, focus trap and focus restore.
+- **Workspaces**: Accounts, Projects and Sheets became **workspaces** instead of modals/tabs;
+  `ProjectDialog` was deleted, editing is in-place, creation stays modal. Context is preserved
+  (breadcrumbs + an in-memory Back stack: Task → Project → Account).
+- **Design system**: dark-only **Krevo Midnight** token layer; **two interface faces**
+  (`interfaceFace: "geist" | "bricolage"`, persisted); Geist Sans/Mono + Bricolage Grotesque;
+  Tabler icon system; chess-knight brand mark (sidebar, favicon, empty states, app icon);
+  rows/tables over cards; `Money` + operational date language (`dueLabel`) as shared primitives.
+- **Exit criteria met:** typecheck clean, 99 vitest tests green, production build green, Tauri
+  dev window launches.
+
 ---
 
 ## 7. Updater security (locked)
@@ -317,7 +332,42 @@ working tree, in the owner's secure storage, with its password). To rotate:
 
 ---
 
-## 8. Enforcement Rules — THE ENFORCER
+## 8. Design system & interaction principles (locked)
+
+**Krevo Midnight** — the visual identity. Dark-only by design decision: one deeply tuned theme
+beats two compromised ones; the token layer is structured so a light face could be added later
+without touching components.
+
+- **Palette**: near-black base `#050608`, graphite surfaces, hairlines at ~7% white. **Acid lime
+  `#C6F24E` is a SIGNAL, never decoration** — active/selected states, focus, key deltas, one
+  primary action, the knight accent. Semantic colours (ok/warn/danger/info/violet) are
+  desaturated to sit beside it. No gradients, no glow, no decorative noise.
+- **Type roles**: **Geist Sans** (UI/display), **Geist Mono** (all numerals, labels, timestamps —
+  tabular), **Bricolage Grotesque Variable** (second interface face). Money and metrics always
+  tabular; never format money or dates ad hoc — use `ui/Money` and `lib/dates` (`dueLabel`).
+- **Interface faces**: one system, two typographic personalities, switched by
+  `html[data-face]` + the `interfaceFace` setting (see §Settings). They must share IA, spacing,
+  components, behaviour and density — only character changes.
+- **Icons**: Tabler (MIT), one 24-grid geometry, consistent stroke/size; no mixed icon styles.
+- **Knight**: the brand mark (Tabler chess-knight) — sidebar, favicon, empty states, desktop icon.
+  Never redraw it by hand.
+- **Surfaces**: rows, tables, grouped sections and workspaces first. A card exists only when
+  information needs elevation (modals, menus, the money line). No card-in-card, no KPI-box grids.
+- **Motion**: communicates state only — one staggered `reveal` on workspace mount, hover/focus
+  transitions, GSAP for modals. `prefers-reduced-motion` disables it. No confetti/count-ups.
+- **Accessibility**: keyboard-first palette (↑↓ Enter Esc, trapped + restored focus), visible
+  focus rings, `aria` roles on dialogs/listbox, tooltips on truncated labels, AA contrast.
+- **Navigation model**: sections are `overview | accounts | tasks | team | finance | settings`.
+  Accounts are a **curated launchpad** (Pinned + Recent ≤5 + All accounts) — never the full
+  roster, never nested projects. Projects live in account workspaces.
+- **Context preservation (first-class)**: workspaces are entered in place, never via modal.
+  Back returns exactly where you came from (session history). Inline actions (payment, task,
+  expense) never move the user. `document.title` follows the workspace.
+- **Progressive disclosure**: sidebar → account → project → task. Show only what each level needs.
+
+---
+
+## 9. Enforcement Rules — THE ENFORCER
 
 These rules apply to **every** change. When asked to "enforce" or "sweep", audit the whole repo
 and **remove** what violates them.
@@ -345,16 +395,20 @@ and **remove** what violates them.
 11. **Never weaken update security.** See §7.
 12. **Keep this file current.** Structure/commands/plan/rule changes must update `AGENTS.md` in
     the same change. A stale AGENTS.md is a bug.
+13. **Style flows through tokens (§8).** No raw hex/rgba in components; no ad-hoc money/date
+    formatting (use `Money` / `dueLabel`); one task row (`ui/TaskItem`); surfaces (rows/tables)
+    before cards; acid lime stays a signal.
 
 ---
 
-## 9. Current status
+## 10. Current status
 
 - [x] Phase 0 — Remediation + test infrastructure
 - [x] Phase 1 — Money (schema V4)
 - [x] Phase 2 — Unified tasks + dashboards
 - [x] Phase 3 — Feature depth (incl. Team weekly work + value)
 - [x] Phase 4 — Tauri desktop shell + SQLite + in-app auto-update
+- [x] Phase 5 — Interface & information-architecture overhaul
 
 *(Check off phases as they complete; add dated progress notes below.)*
 
@@ -387,3 +441,16 @@ real updater UI (manifest URL, key-rotation override, check-on-launch/interval, 
 restart). Fallback keypair generated (private key held outside the repo). JS side build + 105
 vitest tests green; the Rust crate is authored but not compiled here (no Rust toolchain on the
 authoring machine).
+
+**2026-09-18 — Phase 5 complete (interface & IA overhaul).** Prospecting and Content removed.
+Navigation rebuilt around a persistent sidebar (primary surfaces + curated Accounts launchpad
+with Pinned/Recent and a full roster table) plus a Ctrl/Cmd+K command palette with a pure,
+tested ranking module. Accounts and Projects became in-place **workspaces** (project editing no
+longer a modal; inline payments/tasks/deliverables; breadcrumbs + session Back stack). Domain
+state (`AppState`) is now pure (`accounts` + `trash`); all navigation/UI state moved to the
+`NavData` slice (section, active account/project/sheet, trash view, pins, recents, history) —
+`openTabs`/IDE tabs and the sheet bar were deleted. Design system rebuilt as **Krevo Midnight**
+(dark-only, acid-lime signal) with two persisted interface faces (Geist / Bricolage) and a
+Tabler icon set; knight brand assets regenerated. Overview is an operations briefing, Tasks an
+execution queue, Finance a ledger, Team a roster + value board. Typecheck clean, 99 vitest tests
+green, production build green.

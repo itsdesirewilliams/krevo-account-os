@@ -5,9 +5,10 @@ import { useTeam } from "../teamState";
 import { useTasks } from "../../tasks/tasksState";
 import { teamValueTrend, teamWeekValue } from "../teamValue.service";
 import { WeekNav } from "./WeekNav";
-import { formatINR } from "../../../lib/currency";
+import { Money } from "../../../components/ui/Money";
 import { todayLocalIso } from "../../../lib/dates";
 
+/** All members side by side for one ISO week: who has work, output and cost. */
 export function TeamWeeklyBoard() {
   const state = useStoreState();
   const { data: team } = useTeam();
@@ -15,101 +16,93 @@ export function TeamWeeklyBoard() {
   const { selectMember } = useNav();
   const [weekIso, setWeekIso] = useState(todayLocalIso());
 
-  const todayIso = todayLocalIso();
-  const value = teamWeekValue(tasks.tasks, team, state.accounts, weekIso, todayIso);
+  const today = todayLocalIso();
+  const value = teamWeekValue(tasks.tasks, team, state.accounts, weekIso, today);
   const trend = teamValueTrend(tasks.tasks, team, weekIso, 6);
 
-  const rate = (v: number | null) => (v === null ? "—" : `${Math.round(v * 100)}%`);
-  const money = (v: number | null) => (v === null ? "—" : formatINR(v));
+  const rate = (value0: number | null) => (value0 === null ? "—" : `${Math.round(value0 * 100)}%`);
 
   return (
-    <div className="p-6 max-w-4xl">
-      <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-dim mb-3">Team weekly board</div>
+    <div>
+      <div className="section-head" style={{ marginTop: 0 }}>
+        <span className="section-title">Team weekly board</span>
+      </div>
       <WeekNav weekIso={weekIso} onChange={setWeekIso} />
 
-      <div className="flex flex-wrap gap-3 mb-5">
-        <div className="finance-card">
-          <div className="finance-label">Completed</div>
-          <div className="finance-value">{value.totals.completed}</div>
-        </div>
-        <div className="finance-card">
-          <div className="finance-label">Assigned</div>
-          <div className="finance-value">{value.totals.assigned}</div>
-        </div>
-        <div className="finance-card">
-          <div className="finance-label">Overdue</div>
-          <div className="finance-value">{value.totals.overdue}</div>
-        </div>
-        <div className="finance-card">
-          <div className="finance-label">Weekly cost</div>
-          <div className="finance-value">{formatINR(value.totals.weeklyCost)}</div>
-        </div>
-        <div className="finance-card">
-          <div className="finance-label">Cost / completed task</div>
-          <div className="finance-value">{money(value.totals.costPerCompletedTask)}</div>
-        </div>
-      </div>
-
-      {team.members.length === 0 ? (
-        <div className="text-[13px] text-dim py-6">No team members yet.</div>
-      ) : (
-        <div className="fin-list">
-          <div className="fin-row text-[11px] uppercase tracking-[0.08em] text-dim">
-            <span className="fin-name">Member</span>
-            <span className="fin-amount w-20 text-right">Done</span>
-            <span className="fin-amount w-20 text-right">Assigned</span>
-            <span className="fin-amount w-16 text-right">Rate</span>
-            <span className="fin-amount w-16 text-right">Backlog</span>
-            <span className="fin-amount w-16 text-right">Overdue</span>
-            <span className="fin-amount w-24 text-right">Cost</span>
-            <span className="fin-amount w-28 text-right">Cost / task</span>
-          </div>
+      <table className="tbl">
+        <thead>
+          <tr>
+            <th>Member</th>
+            <th className="num">Done</th>
+            <th className="num">Assigned</th>
+            <th className="num">Rate</th>
+            <th className="num">Backlog</th>
+            <th className="num">Overdue</th>
+            <th className="num">Cost</th>
+            <th className="num">Cost / done</th>
+          </tr>
+        </thead>
+        <tbody>
+          {value.members.length === 0 && (
+            <tr><td colSpan={8} className="t-muted">No team members yet.</td></tr>
+          )}
           {value.members.map((member) => (
-            <div key={member.memberId} className="fin-row">
-              <button className="fin-name text-left hover:text-accent" onClick={() => selectMember(member.memberId)}>
-                {member.name}
-              </button>
-              <span className="fin-amount w-20 text-right">{member.completed}</span>
-              <span className="fin-amount w-20 text-right">{member.assigned}</span>
-              <span className="fin-amount w-16 text-right">{rate(member.completionRate)}</span>
-              <span className="fin-amount w-16 text-right">{member.openBacklog}</span>
-              <span className="fin-amount w-16 text-right">{member.overdue}</span>
-              <span className="fin-amount w-24 text-right">{formatINR(member.weeklyCost)}</span>
-              <span className="fin-amount w-28 text-right">{money(member.costPerCompletedTask)}</span>
-            </div>
+            <tr key={member.memberId} className="clickable" onClick={() => selectMember(member.memberId)}>
+              <td className="t-strong">{member.name}</td>
+              <td className="num">{member.completed}</td>
+              <td className="num t-muted">{member.assigned}</td>
+              <td className="num">{rate(member.completionRate)}</td>
+              <td className="num t-muted">{member.openBacklog}</td>
+              <td className="num" style={member.overdue > 0 ? { color: "var(--danger)" } : undefined}>{member.overdue}</td>
+              <td className="num"><Money value={member.weeklyCost} /></td>
+              <td className="num">
+                {member.costPerCompletedTask === null ? <span className="t-muted">—</span> : <Money value={member.costPerCompletedTask} />}
+              </td>
+            </tr>
           ))}
-          <div className="fin-row total">
-            <span className="fin-name">Total</span>
-            <span className="fin-amount w-20 text-right">{value.totals.completed}</span>
-            <span className="fin-amount w-20 text-right">{value.totals.assigned}</span>
-            <span className="w-16" />
-            <span className="fin-amount w-16 text-right">{value.totals.openBacklog}</span>
-            <span className="fin-amount w-16 text-right">{value.totals.overdue}</span>
-            <span className="fin-amount w-24 text-right">{formatINR(value.totals.weeklyCost)}</span>
-            <span className="fin-amount w-28 text-right">{money(value.totals.costPerCompletedTask)}</span>
-          </div>
-        </div>
-      )}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td>Total</td>
+            <td className="num">{value.totals.completed}</td>
+            <td className="num">{value.totals.assigned}</td>
+            <td className="num">—</td>
+            <td className="num">{value.totals.openBacklog}</td>
+            <td className="num">{value.totals.overdue}</td>
+            <td className="num"><Money value={value.totals.weeklyCost} /></td>
+            <td className="num">
+              {value.totals.costPerCompletedTask === null ? <span className="t-muted">—</span> : <Money value={value.totals.costPerCompletedTask} />}
+            </td>
+          </tr>
+        </tfoot>
+      </table>
 
-      <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-dim mt-6 mb-2">
-        Team output vs cost <span className="normal-case tracking-normal font-normal">- last 6 weeks</span>
+      <div className="section-head" style={{ marginTop: 22 }}>
+        <span className="section-title">Team output vs cost</span>
+        <span className="faint" style={{ fontSize: 11 }}>6 weeks</span>
       </div>
-      <div className="fin-list">
-        <div className="fin-row text-[11px] uppercase tracking-[0.08em] text-dim">
-          <span className="fin-name">Week</span>
-          <span className="fin-amount w-24 text-right">Completed</span>
-          <span className="fin-amount w-24 text-right">Cost</span>
-          <span className="fin-amount w-28 text-right">Cost / task</span>
-        </div>
-        {trend.map((point) => (
-          <div key={point.weekStart} className="fin-row">
-            <span className="fin-name">{point.weekKey}</span>
-            <span className="fin-amount w-24 text-right">{point.completed}</span>
-            <span className="fin-amount w-24 text-right">{formatINR(point.weeklyCost)}</span>
-            <span className="fin-amount w-28 text-right">{money(point.costPerCompletedTask)}</span>
-          </div>
-        ))}
-      </div>
+      <table className="tbl">
+        <thead>
+          <tr>
+            <th>Week</th>
+            <th className="num">Completed</th>
+            <th className="num">Cost</th>
+            <th className="num">Cost / task</th>
+          </tr>
+        </thead>
+        <tbody>
+          {trend.map((point) => (
+            <tr key={point.weekStart}>
+              <td className="t-muted">{point.weekKey}</td>
+              <td className="num">{point.completed}</td>
+              <td className="num"><Money value={point.weeklyCost} /></td>
+              <td className="num">
+                {point.costPerCompletedTask === null ? <span className="t-muted">—</span> : <Money value={point.costPerCompletedTask} />}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

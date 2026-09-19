@@ -17,6 +17,7 @@ import {
   tasksByBlock,
   tasksByJob,
   tasksByProject,
+  tasksDueAfter,
   tasksDueOn,
   toggleTask,
   updateTask,
@@ -118,6 +119,11 @@ describe("selectors", () => {
     expect(openTasks(tasks).map((t) => t.id)).not.toContain("done");
     expect(overdueTasks(tasks, "2026-10-29").map((t) => t.id)).toEqual(["overdue"]);
     expect(tasksDueOn(tasks, "2026-10-29").map((t) => t.id)).toEqual(["today"]);
+  });
+
+  it("filters upcoming tasks after a date", () => {
+    expect(tasksDueAfter(tasks, "2026-10-29").map((t) => t.id)).toEqual(["future"]);
+    expect(tasksDueAfter(tasks, "2026-11-05")).toEqual([]);
   });
 
   it("filters by assignee and links", () => {

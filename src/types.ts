@@ -108,13 +108,13 @@ export interface Trash {
   sheets: TrashSheetEntry[];
 }
 
+/**
+ * Persisted domain state only. Navigation/UI state (active account, open
+ * project, trash view, pins) lives in the nav slice.
+ */
 export interface AppState {
   accounts: Account[];
   trash: Trash;
-  openTabs: string[];
-  activeAccountId: string | null;
-  showTrash: boolean;
-  activeSheetByAccount: Record<string, string | null>;
 }
 
 export const isOverview = (sheet: Sheet): sheet is OverviewSheet =>

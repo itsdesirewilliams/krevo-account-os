@@ -172,6 +172,10 @@ export const overdueTasks = (tasks: TaskRecord[], todayIso: string): TaskRecord[
 export const tasksDueOn = (tasks: TaskRecord[], iso: string): TaskRecord[] =>
   openTasks(tasks).filter((t) => t.dueDate === iso);
 
+/** Open tasks strictly after `iso` (the "upcoming" bucket). */
+export const tasksDueAfter = (tasks: TaskRecord[], iso: string): TaskRecord[] =>
+  openTasks(tasks).filter((t) => t.dueDate !== null && t.dueDate > iso);
+
 export const tasksByAssignee = (tasks: TaskRecord[], assigneeId: string | null): TaskRecord[] =>
   tasks.filter((t) => t.assigneeId === assigneeId);
 

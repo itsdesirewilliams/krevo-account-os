@@ -1,7 +1,7 @@
 /*
- * State normalization + migration.
- * Guarantees any loaded payload conforms to the V3 model, and migrates
- * legacy (V2) custom sheets that carried notes/tasks directly on the sheet.
+ * Domain normalization + migration. Guarantees any loaded payload conforms to
+ * the current model and repairs V2/V3-era data. UI/navigation state is NOT
+ * normalized here - it lives in the nav slice.
  */
 import { genId } from "../lib/id";
 import { parseAmount } from "../lib/currency";
@@ -36,8 +36,6 @@ function normalizeProjectStatus(value: unknown): ProjectStatus {
 
 function normalizeProject(p: Partial<Project>): Project {
   const charges = p.charges == null ? "" : p.charges;
-  // V3 stored a free-text charges string; V4 keeps it for display but derives
-  // the structured quotedAmount once.
   const quotedAmount =
     typeof p.quotedAmount === "number" && Number.isFinite(p.quotedAmount) ? p.quotedAmount : parseAmount(charges);
   return {
@@ -48,7 +46,7 @@ function normalizeProject(p: Partial<Project>): Project {
     quotedAmount,
     status: normalizeProjectStatus(p.status),
     payments: Array.isArray(p.payments) ? p.payments.map(normalizePayment) : [],
-    eventDate: p.eventDate == null ? "" : p.eventDate, // ISO yyyy-mm-dd
+    eventDate: p.eventDate == null ? "" : p.eventDate,
     planId: p.planId == null ? null : p.planId,
     deliverables: p.deliverables == null ? null : p.deliverables,
   };
@@ -92,12 +90,9 @@ function normalizeSheet(input: unknown): Sheet {
     return { id, name, projects: projects.map(normalizeProject) };
   }
 
-  // Custom freeform sheet -> blocks array (with V2 legacy migration).
   const blocks: RawBlock[] = Array.isArray(s.blocks) ? [...(s.blocks as RawBlock[])] : [];
   if (s.notes != null) blocks.push({ id: genId(), type: "notes", text: s.notes as string });
-  if (Array.isArray(s.tasks) && s.tasks.length) {
-    blocks.push({ id: genId(), type: "todo" });
-  }
+  if (Array.isArray(s.tasks) && s.tasks.length) blocks.push({ id: genId(), type: "todo" });
   return { id, name, blocks: blocks.map(normalizeBlock) };
 }
 
@@ -105,7 +100,6 @@ function normalizeAccount(a: Partial<Account>): Account {
   const color = a.color === "green" || a.color === "yellow" || a.color === "red" ? a.color : "none";
   const sheets = Array.isArray(a.sheets) ? a.sheets.map(normalizeSheet) : [];
   if (!sheets.some(isOverview)) {
-    // Every account owns exactly one Overview sheet, by construction.
     sheets.unshift({ id: genId(), name: "Overview", projects: [] });
   }
   return {
@@ -121,7 +115,7 @@ function normalizeTrashSheet(input: unknown): TrashSheetEntry | null {
   if (!input || typeof input !== "object") return null;
   const e = input as Partial<TrashSheetEntry>;
   const sheet = normalizeSheet(e.sheet);
-  if (isOverview(sheet)) return null; // Overview sheets are never trashable
+  if (isOverview(sheet)) return null;
   return {
     id: e.id || genId(),
     accountId: e.accountId == null ? "" : e.accountId,
@@ -131,14 +125,7 @@ function normalizeTrashSheet(input: unknown): TrashSheetEntry | null {
 }
 
 export function defaultState(): AppState {
-  return {
-    accounts: [],
-    trash: { accounts: [], sheets: [] },
-    openTabs: [],
-    activeAccountId: null,
-    showTrash: false,
-    activeSheetByAccount: {},
-  };
+  return { accounts: [], trash: { accounts: [], sheets: [] } };
 }
 
 export function normalize(input: unknown): AppState {
@@ -154,34 +141,5 @@ export function normalize(input: unknown): AppState {
       : [],
   };
 
-  // Drop stale references.
-  const accountIds = new Set(accounts.map((a) => a.id));
-  const openTabs = (Array.isArray(source.openTabs) ? source.openTabs : []).filter(
-    (id): id is string => typeof id === "string" && accountIds.has(id),
-  );
-  const activeAccountId =
-    typeof source.activeAccountId === "string" && accountIds.has(source.activeAccountId)
-      ? source.activeAccountId
-      : openTabs[openTabs.length - 1] ?? null;
-
-  const activeSheetByAccount: Record<string, string | null> = {};
-  if (source.activeSheetByAccount && typeof source.activeSheetByAccount === "object") {
-    for (const [accountId, selected] of Object.entries(source.activeSheetByAccount)) {
-      const account = accounts.find((a) => a.id === accountId);
-      if (!account) continue;
-      const stored = typeof selected === "string" ? selected : null;
-      let next: string | null = account.sheets[0]?.id ?? null;
-      if (stored !== null && account.sheets.some((s) => s.id === stored)) next = stored;
-      activeSheetByAccount[accountId] = next;
-    }
-  }
-
-  return {
-    accounts,
-    trash,
-    openTabs,
-    activeAccountId,
-    showTrash: !!source.showTrash,
-    activeSheetByAccount,
-  };
+  return { accounts, trash };
 }

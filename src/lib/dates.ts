@@ -16,6 +16,39 @@ export function todayLocalIso(): string {
   return toIsoDate(new Date());
 }
 
+/* ---------------- Operational date language ---------------- */
+
+/** "Mon 22 Nov" - compact, unambiguous, human. */
+export function shortDate(iso: string): string {
+  const date = parseIsoDate(iso);
+  if (!date) return iso;
+  return date.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+}
+
+/**
+ * Operational due label relative to a reference day:
+ * "Today", "Tomorrow", "Yesterday", "3d overdue", "in 2d", else "Mon 22 Nov".
+ */
+export function dueLabel(iso: string, todayIsoDate: string = todayLocalIso()): string {
+  if (!iso) return "";
+  const date = parseIsoDate(iso);
+  const today = parseIsoDate(todayIsoDate);
+  if (!date || !today) return iso;
+
+  const diff = Math.round((date.getTime() - today.getTime()) / (24 * 60 * 60 * 1000));
+  if (diff === 0) return "Today";
+  if (diff === 1) return "Tomorrow";
+  if (diff === -1) return "Yesterday";
+  if (diff < -1) return `${Math.abs(diff)}d overdue`;
+  if (diff <= 6) return `in ${diff}d`;
+  return shortDate(iso);
+}
+
+/** True when an ISO due date is strictly before the reference day. */
+export function isOverdue(iso: string | null, todayIsoDate: string = todayLocalIso()): boolean {
+  return iso !== null && iso !== "" && iso < todayIsoDate;
+}
+
 /* ---------------- ISO calendar helpers (Monday-Sunday weeks) ---------------- */
 
 const DAY_MS = 24 * 60 * 60 * 1000;
